@@ -1,0 +1,24 @@
+name: Android APK
+on: [push, workflow_dispatch]
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - run: gradle -p climagold-qc assembleDebug lintDebug
+      - run: |
+          mkdir -p /tmp/qc-tests
+          javac -d /tmp/qc-tests climagold-qc/app/src/main/java/pl/climagold/qc/Numbers.java climagold-qc/tests/NumbersTest.java
+          java -cp /tmp/qc-tests NumbersTest
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Climagold-QC-v1-preview-apk
+          path: climagold-qc/app/build/outputs/apk/debug/*.apk
