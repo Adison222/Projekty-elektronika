@@ -19,19 +19,20 @@ import com.google.mlkit.vision.text.latin.TextRecognizerOptions;
 import java.util.*;
 
 public class MainActivity extends ComponentActivity {
+  NativeSession nativeSession;
   ProcessCameraProvider provider;
   LinearLayout root;
   TextView status;
   EditText input;
   ImageCapture capture;
   String serial = "";
-  boolean scanning = false, busy = false;
+  boolean busy = false;
   int count = 0;
-  Uri last;
   androidx.camera.core.Camera camera;
 
   public void onCreate(Bundle b) {
     super.onCreate(b);
+    nativeSession = new NativeSession(this);
     getWindow().setStatusBarColor(Color.rgb(17, 25, 32));
     getWindow().setNavigationBarColor(Color.rgb(17, 25, 32));
     serial = getPreferences(0).getString("lastSerial", "");
@@ -56,7 +57,7 @@ public class MainActivity extends ComponentActivity {
             this,
             new androidx.activity.OnBackPressedCallback(true) {
               public void handleOnBackPressed() {
-                if (busy) {
+                if (busy || nativeSession.busy()) {
                   message("Poczekaj na zapis zdjęcia");
                   return;
                 }
@@ -67,6 +68,24 @@ public class MainActivity extends ComponentActivity {
     if (checkSelfPermission(Manifest.permission.CAMERA)
         != android.content.pm.PackageManager.PERMISSION_GRANTED)
       requestPermissions(new String[] {Manifest.permission.CAMERA}, 1);
+  }
+
+  @Override
+  protected void onResume() {
+    super.onResume();
+    if (nativeSession != null && nativeSession.active()) nativeSession.panel();
+  }
+
+  @Override
+  public void onRequestPermissionsResult(int request, String[] permissions, int[] grants) {
+    super.onRequestPermissionsResult(request, permissions, grants);
+    nativeSession.permissionResult(request);
+  }
+
+  @Override
+  protected void onActivityResult(int request, int result, Intent data) {
+    super.onActivityResult(request, result, data);
+    nativeSession.result(request, result);
   }
 
   protected void onSaveInstanceState(Bundle b) {
@@ -122,6 +141,10 @@ public class MainActivity extends ComponentActivity {
   }
 
   void home() {
+    if (nativeSession.active()) {
+      nativeSession.panel();
+      return;
+    }
     if (provider != null) provider.unbindAll();
     capture = null;
     layout();
@@ -129,7 +152,7 @@ public class MainActivity extends ComponentActivity {
     logo.setImageResource(pl.climagold.qc.R.drawable.climagold);
     logo.setAdjustViewBounds(true);
     root.addView(logo, new LinearLayout.LayoutParams(-1, 100));
-    label("Kontrola jakości • v1 preview");
+    label("Kontrola jakości • v1.1 preview");
     label("1. Wybierz centralę");
     input = new EditText(this);
     input.setTextColor(Color.WHITE);
@@ -160,6 +183,7 @@ public class MainActivity extends ComponentActivity {
   }
 
   void confirm(String value) {
+    if (!nativeSession.readBeforeConfirm(value)) return;
     String path = "DCIM/" + Numbers.folder(value) + "/";
     boolean exists = false;
     try (android.database.Cursor c =
@@ -195,14 +219,17 @@ public class MainActivity extends ComponentActivity {
   }
 
   void openCamera(boolean scan) {
+    if (!scan) {
+      nativeSession.start();
+      return;
+    }
     if (checkSelfPermission(Manifest.permission.CAMERA)
         != android.content.pm.PackageManager.PERMISSION_GRANTED) {
       message("Zezwól aplikacji na dostęp do aparatu w ustawieniach telefonu.");
       return;
     }
-    scanning = scan;
     layout();
-    label(scan ? "Karta lub naklejka" : serial + " • zdjęcia kontroli");
+    label("Skaner karty lub naklejki");
     PreviewView preview = new PreviewView(this);
     root.addView(preview, new LinearLayout.LayoutParams(-1, 0, 1));
     status = new TextView(this);
@@ -220,13 +247,7 @@ public class MainActivity extends ComponentActivity {
                     : mode == 1 ? "Lampa włączona" : "Lampa wyłączona");
           }
         });
-    button(scan ? "Odczytaj numer" : "Zrób zdjęcie", () -> shoot());
-    if (!scan)
-      button(
-          "Zdjęcia tej centrali",
-          () -> {
-            if (!busy) gallery(0);
-          });
+    button("Odczytaj numer", () -> shoot());
     button(
         "OK • zakończ",
         () -> {
@@ -298,7 +319,7 @@ public class MainActivity extends ComponentActivity {
     busy = true;
     status.setText("Przetwarzanie…");
     capture.setTargetRotation(getWindowManager().getDefaultDisplay().getRotation());
-    if (scanning) {
+    {
       capture.takePicture(
           ContextCompat.getMainExecutor(this),
           new ImageCapture.OnImageCapturedCallback() {
@@ -330,31 +351,6 @@ public class MainActivity extends ComponentActivity {
           });
       return;
     }
-    ContentValues values = new ContentValues();
-    values.put(
-        MediaStore.Images.Media.DISPLAY_NAME,
-        "QC_" + System.currentTimeMillis() + "_" + UUID.randomUUID() + ".jpg");
-    values.put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg");
-    values.put(MediaStore.Images.Media.RELATIVE_PATH, "DCIM/" + Numbers.folder(serial));
-    var output =
-        new ImageCapture.OutputFileOptions.Builder(
-                getContentResolver(), MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
-            .build();
-    capture.takePicture(
-        output,
-        ContextCompat.getMainExecutor(this),
-        new ImageCapture.OnImageSavedCallback() {
-          public void onImageSaved(ImageCapture.OutputFileResults result) {
-            last = result.getSavedUri();
-            busy = false;
-            status.setText("Zapisano • " + (++count) + " zdjęć");
-          }
-
-          public void onError(ImageCaptureException e) {
-            busy = false;
-            message("Błąd zapisu: " + e.getMessage());
-          }
-        });
   }
 
   void gallery(int requested) {

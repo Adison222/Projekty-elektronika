@@ -1,34 +1,46 @@
-# Climagold QC — v1 preview
+# Climagold QC — v1.1 preview: aparat telefonu
 
-Aplikacja Android 10+ do zdjęć kontroli jakości central. Wydanie testowe, niezweryfikowane na fizycznym telefonie.
+Android 10+. **Serię zdjęć wykonuje normalna aplikacja aparatu telefonu**, otwierana przez `INTENT_ACTION_STILL_IMAGE_CAMERA`. Zachowuje swój interfejs, przyciski obiektywów 2×/3×, flesz i pozostałe funkcje dostępne na danym telefonie. Climagold QC nie zastępuje tego aparatu. Wbudowany podgląd CameraX służy wyłącznie do skanowania numeru z karty lub naklejki.
 
-## Instalacja i obsługa
-Pobierz `releases/Climagold-QC-v1-preview.apk` z tego repozytorium, otwórz na telefonie i zezwól na instalację z wybranego źródła. Po uruchomieniu zezwól na aparat.
+## Instalacja
+Pobierz [Climagold-QC-v1.1-preview.apk](../releases/Climagold-QC-v1.1-preview.apk). Zainstaluj jako aktualizację v1, bez odinstalowywania poprzedniej wersji. Wersja ma ten sam identyfikator aplikacji i podpis debug jak dostarczony wcześniej APK v1.
 
-1. Skanuj kartę/naklejkę albo wpisz numer. OCR działa lokalnie (model jest w APK).
-2. Wybierz numer z listy i zatwierdź folder. Zakres C14015-23 daje C14015…C14023. Numer C14877/26 z przykładowej karty generatora daje C14877.
-3. Rób serię przyciskiem „Zrób zdjęcie”. Nie ma zatwierdzania każdego ujęcia. Poczekaj na komunikat o zapisaniu przed następnym zdjęciem.
-4. „Zdjęcia tej centrali” otwiera galerię: szczypanie powiększa, przeciąganie przesuwa, podwójne stuknięcie przywraca dopasowanie. Przyciski przełączają zdjęcia.
-5. „OK” kończy serię. Ostatni numer jest zapamiętany po zamknięciu aplikacji.
+## Praca z centralą
+1. Zeskanuj kartę/naklejkę albo wpisz numer. OCR działa na telefonie, bez sieci.
+2. Przy pierwszym użyciu zezwól na dostęp do **wszystkich zdjęć** — jest niezbędny, ponieważ zdjęcia tworzy osobna aplikacja aparatu. Dostęp tylko do wybranych zdjęć nie wystarczy do automatycznego wykrywania nowej serii.
+3. Wybierz numer z listy i zatwierdź. Przy istniejących zdjęciach pojawi się informacja o tym samym folderze.
+4. Otworzy się aparat telefonu. Rób dowolną serię, używając jego zoomu, obiektywów, flesza i podglądu. Nie ma zatwierdzania każdego zdjęcia przez Climagold QC.
+5. Po zakończeniu wróć do Climagold QC przyciskiem Wstecz albo przez przełącznik aplikacji. Fabryczny aparat nie udostępnia przycisku „OK” kończącego sesję naszej aplikacji.
+6. Wybierz **OK • wybierz i przypisz serię**. Sprawdź listę nowych zdjęć, odznacz ewentualne obce zdjęcia i zatwierdź całą serię.
+7. **Android 11+:** zaakceptuj systemowe zezwolenie na modyfikację wybranej serii. Zdjęcia zostaną przeniesione do `DCIM/<numer>/`, bez dekodowania i ponownej kompresji. **Android 10:** aplikacja kopiuje serię do folderu centrali, pozostawiając oryginały w folderze aparatu; nie żąda zgody po każdym zdjęciu.
 
-Zdjęcia trafiają przez Android MediaStore do `DCIM/<numer>/`. C/K tracą prefiks. Ponowny wybór numeru wykrywa istniejące zdjęcia i wyświetla komunikat. Pliki mają unikalne nazwy, nie są nadpisywane. IEW/RIEW i Z zachowują prefiks. OCR normalizuje wielkość liter oraz backslash do slash; slash w nazwie folderu zastępuje znak ∕, ponieważ separator ścieżki nie może być częścią nazwy jednego folderu.
+Sesja i jej numer są zapamiętywane również po ponownym otwarciu aplikacji. Można ponownie otworzyć aparat, dodać ujęcia albo zakończyć sesję bez przypisywania; zdjęcia nie zostaną wtedy usunięte. Nie zamykaj aplikacji podczas przypisywania. Błędy są raportowane; nieprzypisane oryginały pozostają w aparacie i można ponowić wybór serii.
 
-## Aparat i jakość
-CameraX wybiera najwyższą dostępną rozdzielczość dla danego zestawu strumieni, tryb maksymalnej jakości i JPEG quality 100. Zapisane JPEG nie są ponownie skalowane ani kompresowane przez aplikację. JPEG nadal jest formatem stratnym. Miniatura galerii jest pomniejszana wyłącznie do wyświetlania; oryginał pozostaje bez zmian.
+## Numery i foldery
+- `C14015-23` rozwija się do C14015…C14023; `C14568 c14578` daje dwa numery do wyboru.
+- `C14877/26` z przykładowej karty generatora daje C14877, bez roku.
+- C/K tracą prefiks w folderze: `K4567` → `DCIM/4567/`.
+- IEW/RIEW i Z zachowują prefiks. Format IEW/RIEW wymaga separatora i numeru. OCR normalizuje litery i backslash do slash; slash w pojedynczej nazwie folderu zastępuje `∕`, ponieważ `/` jest separatorem katalogów.
+- Zakresy powyżej 501 numerów i nietypowe formaty wymagają ręcznej korekty.
 
-Aparat obsługuje powiększenie gestem, dotknięcie punktu ostrości i zmianę trybu lampy. Nie daje wszystkich funkcji aplikacji producenta (np. firmowego HDR, nocnego przetwarzania i wszystkich obiektywów). Aplikacja prosi system o tryb ekranu 120 Hz, jeśli taki tryb istnieje; nie gwarantuje 120 klatek aparatu ani stałej płynności.
+## Jakość i galeria
+Zdjęcia powstają z jakością ustawioną w aparacie telefonu. Na Androidzie 11+ zmieniana jest wyłącznie lokalizacja pliku przez MediaStore; aplikacja nie przelicza pikseli. Na Androidzie 10 kopiowane są bajty udostępnione przez system, bez ponownego kodowania obrazu; Android może ukrywać metadane lokalizacji GPS.
 
-## Weryfikacja i ograniczenia
-- Przetestowano 10 przypadków parsera, kompilację APK oraz Android Lint.
-- Nie przeprowadzono testów fotograficznych, gestów i skuteczności OCR na fizycznym telefonie. Zawsze sprawdź numer przed zatwierdzeniem.
-- Zweryfikowano format karty z `GeneratorV47/przyklady/PL-1.86/C14877_PL.pdf`; logo pochodzi z `generator_naklejek/dokumentacja/climagold_ui.png`.
-- Zakresy powyżej 501 numerów i nieznane formaty nie są automatycznie rozwijane. Format IEW/RIEW musi zawierać separator i numer.
-- Wykrywanie istniejących folderów obejmuje zdjęcia widoczne tej instalacji aplikacji. Po reinstalacji lub przy zdjęciach utworzonych przez inne aplikacje potrzebna będzie dodatkowa obsługa dostępu. Nie odinstalowuj aplikacji między seriami.
-- Galeria ma gesty powiększania/przesuwania, lecz zmiana zdjęć odbywa się przyciskami. Nie ma jeszcze kosza, adnotacji, eksportu ZIP ani synchronizacji.
-- APK jest podpisany kluczem debug i przeznaczony do pilotażu. Stały podpis wydawniczy trzeba przygotować przed wdrożeniem produkcyjnym. Kolejne buildy CI mogą użyć innego klucza debug.
+Podczas fotografowania używaj podglądu fabrycznego aparatu. Po przypisaniu dostępna jest też galeria centrali: szczypanie powiększa, przesuwanie przesuwa, podwójne stuknięcie dopasowuje obraz. Kolejne zdjęcia wybiera się przyciskami. Pomniejszanie podglądu nie zmienia pliku zdjęcia.
+
+## Zweryfikowane i wymagające testu na telefonie
+- Zbudowano APK, Android Lint zakończył się bez błędów; 10 testów parsera przeszło.
+- Zweryfikowano podpis APK i zgodność podpisu z v1.
+- Nie testowano na fizycznym telefonie: uruchamiania aplikacji producenta, uprawnień MediaStore, przenoszenia zdjęć, skuteczności OCR i płynności. To wydanie testowe.
+- Android wybiera aplikację obsługującą standardowe uruchomienie aparatu; przy kilku aplikacjach może pokazać wybór. Dostępność obiektywów i funkcji zależy od telefonu i aparatu, nie od Climagold QC.
+- Wykrywane są nowe, ukończone obrazy w DCIM od rozpoczęcia sesji. System nie przekazuje identyfikatora „zdjęcie z naszej serii”, dlatego trzeba sprawdzić końcową listę. Inne zdjęcia utworzone lub zaimportowane w DCIM podczas sesji mogą na niej wystąpić. Pliki poza DCIM, filmy i część osobnych plików RAW nie są obsługiwane. Jeśli aparat jeszcze zapisuje zdjęcie, ponów wyszukiwanie.
+- Brak gwarancji 120 Hz; odświeżaniem fabrycznego aparatu zarządza producent. Nasz ekran prosi o 120 Hz, jeśli telefon udostępnia taki tryb.
+- APK jest podpisany kluczem debug do pilotażu; przed wdrożeniem produkcyjnym trzeba przygotować stały podpis wydawniczy. Artefakt CI może mieć inny podpis debug niż udostępniony APK.
+
+Logo pochodzi z repozytorium GeneratorV47, format przykładowej karty z `przyklady/PL-1.86/C14877_PL.pdf`. Zdjęcia i OCR nie są wysyłane do chmury.
 
 ## Budowanie
-JDK 17, Android SDK 35, Gradle 8.9.
+JDK 17, Android SDK 35, Gradle 8.9, katalog `climagold-qc`:
 
 ```sh
 gradle assembleDebug lintDebug
@@ -37,4 +49,4 @@ javac -d /tmp/qc-tests app/src/main/java/pl/climagold/qc/Numbers.java tests/Numb
 java -cp /tmp/qc-tests NumbersTest
 ```
 
-Workflow `.github/workflows/android.yml` buduje APK i udostępnia artefakt. Brak usług, sekretów i połączeń chmurowych potrzebnych do działania aplikacji. Zdjęcia nie opuszczają telefonu.
+Workflow `.github/workflows/android.yml` buduje APK, uruchamia lint i testy parsera oraz udostępnia artefakt.
