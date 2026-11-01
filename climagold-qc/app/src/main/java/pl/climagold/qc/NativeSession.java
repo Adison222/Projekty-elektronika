@@ -241,7 +241,7 @@ final class NativeSession {
     activity.capture = null;
     activity.serial = prefs.getString("serial", "");
     activity.layout();
-    activity.label((ended() ? "Seria zakończona · " : "Seria · ") + activity.serial);
+    activity.label((ended() ? "Dokończ zapis · " : "Seria · ") + activity.serial);
     if (ended()) {
       activity.hint(
           prefs.getString("end_reason", "Zakończenie serii")
@@ -256,7 +256,8 @@ final class NativeSession {
       activity.button("Otwórz aparat", this::launch);
       activity.action("Zakończ i przypisz zdjęcia", () -> finish("Zakończono przyciskiem"), true);
     }
-    activity.button("Galeria centrali", () -> activity.gallery(0));
+    activity.button("Zdjęcia tej centrali", () -> activity.gallery(0));
+    activity.button("Wszystkie centrale", activity::browseUnits);
     activity.button(
         "Zakończ bez przypisywania",
         () ->
@@ -272,7 +273,7 @@ final class NativeSession {
   void lastSessionCard() {
     String number = history.getString("serial", "");
     if (number.isEmpty()) return;
-    activity.label("Ostatnia zakończona seria · " + number);
+    activity.label("Ostatnia seria · " + number);
     String when =
         android.text.format.DateFormat.format("dd.MM.yyyy HH:mm", history.getLong("finished", 0))
             .toString();
@@ -315,7 +316,13 @@ final class NativeSession {
             .getContentResolver()
             .query(
                 MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
-                new String[] {"_id", "relative_path", "date_taken", "date_added", "is_pending"},
+                new String[] {
+                  "_id",
+                  "relative_path",
+                  MediaStore.Images.Media.DATE_TAKEN,
+                  "date_added",
+                  "is_pending"
+                },
                 "_id > ?" + (Build.VERSION.SDK_INT >= 30 ? " AND is_trashed = 0" : ""),
                 new String[] {Long.toString(prefs.getLong("after_id", 0))},
                 "_id ASC")) {
@@ -540,7 +547,7 @@ final class NativeSession {
             .getContentResolver()
             .query(
                 source,
-                new String[] {"_display_name", "mime_type", "date_taken"},
+                new String[] {"_display_name", "mime_type", MediaStore.Images.Media.DATE_TAKEN},
                 null,
                 null,
                 null)) {

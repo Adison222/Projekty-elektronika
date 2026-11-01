@@ -1,11 +1,10 @@
 # Projekty-elektronika
-Projekty zwiazane z elektronika 
+Projekty związane z elektroniką.
 
-## Climagold QC — v1.5 preview
-Aplikacja Android do dokumentacji fotograficznej kontroli jakości: [opis i instrukcja](climagold-qc/README.md).
+## Climagold QC — v1.6 preview
 
-Automatyczne zakończenie serii po powrocie z aparatu lub blokadzie ekranu, wznowienie ostatniej sesji, odczyt C/K/IEW/RIEW/R/Z bez separatora przed numerem i import zdjęć. Android 10+. [Pobierz APK v1.5 preview](releases/Climagold-QC-v1.5-preview.apk?raw=true).
+[**Pobierz APK v1.6**](releases/Climagold-QC-v1.6-preview.apk?raw=true) · [Instrukcja](climagold-qc/README.md)
 
-APK v1.5 ma ten sam podpis co udostępnione APK v1.3 i v1.4 i można go zainstalować jako ich aktualizację. Podpis różni się od historycznego pliku v1.1. Przed ewentualną zmianą instalacji zakończ bieżącą serię i zabezpiecz zdjęcia; nie odinstalowuj aplikacji z otwartą sesją.
+Prostszy interfejs fotografowania, przeglądarka folderów central, automatyczne sugestie numerów, naprawa błędu `Invalid column date_taken` oraz eksperymentalny odczyt ręcznych prefiksów i cyfr offline. Azure usunięto. Android 10+.
 
-[Historyczny APK v1.1 preview](releases/Climagold-QC-v1.1-preview.apk) nie zawiera nowych funkcji.
+APK można instalować jako aktualizację udostępnionych v1.3–v1.5 bez odinstalowywania. Po aktualizacji można ponowić zapis oczekującej serii. Nie usuwaj aplikacji z niezakończonym przypisywaniem. Wersja testowa — szczegóły i ograniczenia w instrukcji.

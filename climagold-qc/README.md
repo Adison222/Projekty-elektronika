@@ -1,99 +1,64 @@
-# Climagold QC — v1.5 preview: oznaczenia bez separatora i prefiks R
+# Climagold QC — v1.6 preview
 
-Android 10+. **Serię zdjęć wykonuje normalna aplikacja aparatu telefonu**, otwierana przez `INTENT_ACTION_STILL_IMAGE_CAMERA`. Zachowuje swój interfejs, przyciski obiektywów 2×/3×, flesz i pozostałe funkcje dostępne na danym telefonie. Climagold QC nie zastępuje tego aparatu. Wbudowany podgląd CameraX służy wyłącznie do skanowania numeru z karty lub naklejki.
+Aplikacja Android 10+ do fotografowania central. Zdjęcia wykonuje zwykły aparat telefonu ze swoimi obiektywami i ustawieniami. Climagold wybiera numer, pilnuje serii i porządkuje pliki.
 
-## Co nowego w 1.5
-- Dodano prefiks **R**, np. `R14577`, także w OCR, zakresach i przy ręcznym wpisywaniu. Folder zachowuje pełną nazwę `DCIM/R14577/`.
-- Między literami prefiksu a numerem nie ma separatora: `IEW123`, `RIEW123`, `Z123`, `R14577`. Stary zapis `IEW/123` lub `RIEW 123` jest przyjmowany na wejściu i normalizowany do poprawnego oznaczenia.
-- Nowe zdjęcia trafiają do folderów bez separatora po prefiksie. Zapamiętane oznaczenia otwartej i ostatniej sesji są normalizowane; stan przypisywania pozostaje zachowany.
-- Galeria i sprawdzanie wcześniejszych zdjęć uwzględniają też stare foldery, np. `IEW∕123`. Nie przenosimy automatycznie wcześniejszych plików. Slash wewnątrz dalszej części identyfikatora, np. w `IEW123/26`, pozostaje częścią identyfikatora i jest kodowany w nazwie folderu jako `∕`.
+[**Pobierz APK v1.6**](../releases/Climagold-QC-v1.6-preview.apk?raw=true)
 
-## Co nowego w 1.4 — koniec i wznowienie sesji
-- Powrót z aparatu do aplikacji (Wstecz albo przełącznik aplikacji) automatycznie zamyka przedział czasowy serii i rozpoczyna przypisywanie zdjęć, bez dodatkowego przycisku wyboru serii.
-- Blokada lub wygaszenie ekranu zamyka serię także podczas używania zewnętrznego aparatu. Przez czas otwartej serii działa usługa pierwszoplanowa, która odbiera zdarzenie wyłączenia ekranu. Na Androidzie 13+ aplikacja prosi raz o powiadomienia, aby wyświetlać trwającą serię.
-- **Po blokadzie wróć po odblokowaniu do Climagold QC.** Wtedy aplikacja rozpocznie przypisywanie. Android 11+ wymaga systemowej zgody na modyfikację zdjęć utworzonych przez inną aplikację — nie można jej zatwierdzić za użytkownika ani przy zablokowanym ekranie. Nie obiecujemy przeniesienia plików podczas blokady.
-- Aplikacja czeka na zapis ostatnich ujęć. Uwzględnia datę wykonania i zapamiętaną granicę serii; zdjęcia wykonane po jej końcu są pomijane. Zdjęcia opublikowane z opóźnieniem są uwzględniane, jeśli mają datę wykonania w zakończonej serii.
-- Odmowa systemowej zgody lub błąd pozostawia zamkniętą serię do ponowienia przyciskiem **Dokończ przypisywanie zdjęć**. Nie pojawia się pętla próśb o zgodę. Gdy nie ma zdjęć, można ponowić wyszukiwanie albo zamknąć pustą serię.
-- Po ukończeniu pojawia się ostatnia zakończona sesja, jej numer i data. Przycisk **Dołącz do ostatniej sesji** pokazuje potwierdzenie i otwiera aparat dla tego samego numeru/folderu. Nowy przedział obejmuje tylko nowe zdjęcia; nie dołącza zdjęć z przerwy między sesjami.
+## Co zmieniono
 
-## Co nowego w 1.3 — oznaczenia i podstawowy OCR offline
-Aplikacja traktuje prefiks i numer obok niego jako jedno oznaczenie:
+- Prostszy ekran startowy: **Nowa seria zdjęć** i **Centrale i zdjęcia**, a po zakończeniu serii także możliwość dołączenia do ostatniej sesji.
+- Kolejność pracy: numer → zdjęcia → zapis. Czytelne przyciski, granatowo-złote kolory, efekty dotyku i krótkie przejścia respektujące systemowe wyłączenie animacji.
+- Sugestie numerów wyświetlają się od razu po OCR i podczas wpisywania. Nie trzeba ich osobno otwierać.
+- Przeglądarka central z wyszukiwaniem, liczbą zdjęć i otwieraniem galerii konkretnego folderu.
+- Naprawiono **Invalid column date_taken**: zapytania używają właściwej kolumny Android MediaStore `datetaken`, przez stałą `DATE_TAKEN`.
+- Usunięto Azure, konfigurację usługi i uprawnienie do Internetu. Odczyt wydruku i pisma ręcznego odbywa się lokalnie.
+- Dodano mały model uczony na ręcznych literach i cyfrach oraz odczyt ograniczony do znanych prefiksów i numeru. To funkcja eksperymentalna; każdą propozycję trzeba sprawdzić.
 
-| Prefiks | Znaczenie | Przykład |
-| --- | --- | --- |
-| C | Centrala | `C 12345` → `C12345` |
-| K | Kompakt | `K 0042` → `K0042` |
-| IEW | Inne zamówienie | `IEW 123` → `IEW123` |
-| RIEW | Inne zamówienie elementów automatyki | `RIEW123` → `RIEW123` |
-| R | Prefiks R | `R 14577` → `R14577` |
-| Z | Prefiks Z | `Z 123` → `Z123` |
+## Instalacja i odzyskanie zakończonej serii
 
-Numer może być przyklejony do prefiksu lub oddzielony spacją. IEW/RIEW/R/Z przyjmują także stary zapis z separatorem; wynik nie zawiera separatora między prefiksem a cyframi. Zera wiodące są zachowywane. Prefiks bez numeru i same liczby z tabliczki nie tworzą oznaczenia w trybie centrali. Nie łączymy prefiksu z numerem z innego wiersza.
+APK v1.6 ma ten sam podpis co udostępnione wersje v1.3–v1.5: instaluj jako aktualizację, **bez odinstalowywania aplikacji**. Zachowasz stan oczekującej serii. Po aktualizacji wróć do zakończonej serii i naciśnij **Dokończ przypisywanie zdjęć**. Poprawka błędu daty obejmuje wyszukiwanie zdjęć i kopiowanie na Androidzie 10.
 
-Skaner i import zdjęć wykonują **dwa odczyty offline**: oryginału i obrazu w skali szarości z podniesionym kontrastem. Możesz spróbować czytelnych ręcznych liter drukowanych i osobnych cyfr. To nadal ML Kit, a nie model wytrenowany specjalnie na piśmie ręcznym; bez przykładowych zdjęć z pracy nie potwierdzono skuteczności tej metody.
+Podpis różni się od historycznego APK v1.1. Jest to podpis debug do pilotażu; artefakty GitHub Actions mogą mieć inny podpis niż publikowany APK. Sumy plików znajdują się w `releases/SHA256SUMS`.
 
-W ekranie **Sprawdź odczyt** wybierz **Podpowiedz oznaczenie C / K / IEW / RIEW / R / Z**. Podpowiedzi szukają znanego prefiksu i numeru obok oraz proponują korekty `O→0`, `I/L/|→1`, `S→5`, `B→8`, `Z→2` w części liczbowej. Mogą także odczytać `R1EW` jako `RIEW`. Wymagana jest co najmniej jedna rzeczywiście rozpoznana cyfra. Sugestia dopiero po wybraniu trafia do pola edycji — **porównaj ją z oryginałem** przed zatwierdzeniem. Ręcznie wpisany numer nie podlega tym zamianom. Brak wyniku oznacza konieczność poprawienia oznaczenia lub wykonania wyraźniejszego zdjęcia, a nie automatyczne wysłanie do chmury.
+## Fotografowanie
 
-## Co nowego w 1.2
-- Nowy, granatowo-złoty interfejs, przewijany ekran główny, czytelna hierarchia akcji, przyciski z efektem dotyku i animowane przejścia. Animacje respektują systemowe wyłączenie animacji.
-- **Wczytaj zdjęcie z numerem**: systemowy wybór jednego obrazu, podgląd, obsługa orientacji EXIF, odczyt offline i edytowalny wynik. Import do OCR nie potrzebuje uprawnienia do całej galerii i nie zmienia oryginału.
-- **Numery ogólne**: osobny przełącznik pozwala wybierać liczby bez prefiksu, np. `001234`, i oznaczenia `AB-12/26`. Zachowuje zera wiodące. W tym trybie `123-125` jest jednym oznaczeniem, nie zakresem. Na zdjęciu mogą zostać wykryte także rok, napięcie czy inne liczby: wybierz właściwy numer.
-- Odczyt zawsze można poprawić przed wyborem centrali. Tryb ogólny wybierz na ekranie głównym lub podczas korekty odczytu.
-- Aparat prosi o dostęp dopiero przy uruchamianiu skanera.
+1. Wybierz **Nowa seria zdjęć**. Wpisz numer, zeskanuj oznaczenie aparatem albo wczytaj jego zdjęcie.
+2. Wybierz automatyczną podpowiedź lub popraw numer. Potwierdź właściwą centralę i wybierz **Rób zdjęcia**.
+3. Rób serię aparatem telefonu. Nie trzeba zatwierdzać każdego ujęcia.
+4. Wróć do Climagold: seria zakończy się i rozpocznie zapis. Blokada lub wygaszenie ekranu także zamyka przedział serii. **Po odblokowaniu wróć do aplikacji**, żeby dokończyć zapis.
+5. Android 11+ pokaże zgodę na przeniesienie zdjęć do `DCIM/<numer>/`. Android 10 kopiuje zdjęcia i zachowuje oryginały. Obrazy nie są ponownie kompresowane.
+6. Aby zrobić kolejne ujęcia tej samej centrali, wybierz **Dołącz do ostatniej sesji** i potwierdź. Zdjęcia z przerwy pomiędzy seriami nie są dołączane.
 
-## Pismo ręczne — opcjonalna usługa
-Domyślny ML Kit działa offline i najlepiej rozpoznaje druk. Nie zapewnia niezawodnego odczytu pisma ręcznego. Dla pisma ręcznego dodano oddzielną integrację **Azure AI Vision Read v3.2**, obsługującą tekst drukowany i odręczny:
+Potrzebny jest dostęp do wszystkich zdjęć, ponieważ tworzy je zewnętrzny aparat. Powiadomienie trwającej serii pozwala usłudze monitorować blokadę. Systemowej zgody na modyfikację cudzych zdjęć nie da się potwierdzić przy zablokowanym ekranie. Odmowa lub błąd zachowują serię do ponowienia. Zakończenie bez przypisywania nie usuwa zdjęć.
 
-1. W Azure utwórz zasób Azure AI Vision obsługujący Read v3.2. Potrzebujesz własnego klucza i endpointu `https://NAZWA.cognitiveservices.azure.com/`. Usługa może być płatna.
-2. W aplikacji wybierz **Wczytaj zdjęcie z numerem**, następnie **Pismo ręczne · OCR w chmurze**.
-3. Wpisz adres i klucz. Przycisk **Wyślij i odczytaj** wysyła całe wybrane zdjęcie (pomniejszone do maks. 2400 px) do wskazanej usługi Microsoft. Nie następuje automatyczne wysyłanie po błędzie OCR offline.
-4. Sprawdź i popraw wynik przed wyborem numeru. Skuteczność zależy od czytelności pisma i zdjęcia.
+## Numery i odczyt
 
-Zapamiętywany jest tylko adres usługi. Klucz jest używany w pamięci do jednej operacji, bez zapisu na dysku, w logach i repozytorium. W tej wersji chmurowy odczyt jest dostępny dla importowanego zdjęcia; skaner na żywo korzysta z OCR offline. Nie skonfigurowano konta Azure i nie wykonano odczytu na rzeczywistej usłudze podczas prac nad tą wersją.
+Obsługiwane prefiksy: **C, K, IEW, RIEW, R, Z**, np. `C13932`, `K0042`, `IEW123`, `RIEW123`, `R14577`, `Z123`. Prefiks musi mieć numer obok siebie. Między prefiksem a cyframi wynik nie zawiera `/`; stary zapis jest normalizowany. Zera wiodące pozostają.
 
-## Instalacja
-[**Pobierz Climagold-QC-v1.5-preview.apk**](../releases/Climagold-QC-v1.5-preview.apk?raw=true) — gotowy plik dla Androida 10+ z bieżącej wersji źródeł 1.5. Suma kontrolna znajduje się w `releases/SHA256SUMS`.
+- **Wydruk:** dwa lokalne odczyty ML Kit, oryginału i obrazu o podniesionym kontraście. Sugestie uwzględniają typowe pomyłki liter i cyfr.
+- **Pismo ręczne:** wybierz tę opcję w skanerze lub przy wczytanym zdjęciu. Zaznacz palcem jeden wiersz zawierający tylko prefiks i numer, następnie wybierz rozpoznawanie. Model rozpoznaje osobne znaki, a reguły składają tylko dozwolone prefiksy i cyfry. Najlepszy materiał to ciemne, oddzielne litery drukowane i cyfry na jasnym tle. Pismo łączone, nakładające się znaki, linie tabeli, cień i obrót mogą uniemożliwić odczyt. Wtedy popraw kadr lub wpisz numer.
+- **Inny format numeru:** pozwala użyć samych cyfr albo niestandardowego oznaczenia. Ręczny model jest przeznaczony do znanych prefiksów, nie do dowolnego tekstu.
 
-Zweryfikowano podpis APK: **v1.5 ma ten sam podpis co udostępnione APK v1.3 i v1.4** i może być zainstalowany jako ich aktualizacja, bez odinstalowywania. Podpis jest inny niż historycznego APK v1.1. Zakończ aktywną serię przed aktualizacją. Nie usuwaj aplikacji z otwartą sesją; zmiana instalacji może usunąć jej stan.
+Propozycje są edytowalne, nigdy nie rozpoczynają serii bez potwierdzenia. Nie należy traktować ich jako pewnego odczytu. [Opis modelu, źródła danych i wyniki pomiarów](model/README.md).
 
-GitHub Actions nadal buduje artefakt `Climagold-QC-v1.5-preview-apk`. Historyczny [APK v1.1](../releases/Climagold-QC-v1.1-preview.apk) nie zawiera nowych funkcji.
+## Centrale i zdjęcia
 
-## Praca z centralą
-1. Zeskanuj kartę/naklejkę, wczytaj zdjęcie albo wpisz numer. Domyślny OCR działa na telefonie, bez sieci.
-2. Przy pierwszym użyciu zezwól na dostęp do **wszystkich zdjęć** — jest niezbędny, ponieważ zdjęcia tworzy osobna aplikacja aparatu. Dostęp tylko do wybranych zdjęć nie wystarczy do automatycznego wykrywania nowej serii.
-3. Wybierz numer z listy i zatwierdź. Przy istniejących zdjęciach pojawi się informacja o tym samym folderze.
-4. Otworzy się aparat telefonu. Rób dowolną serię, używając jego zoomu, obiektywów, flesza i podglądu. Nie ma zatwierdzania każdego zdjęcia przez Climagold QC.
-5. Powrót z aparatu automatycznie kończy serię i uruchamia przypisywanie. Blokada ekranu zamyka serię; po odblokowaniu wróć do aplikacji, aby dokończyć przypisanie.
-6. **Android 11+:** zaakceptuj systemową zgodę na przeniesienie zdjęć do `DCIM/<numer>/`. Obrazy nie są ponownie kompresowane. **Android 10:** aplikacja kopiuje serię do folderu centrali, zachowując oryginały w aparacie.
-7. Po zapisaniu możesz wybrać **Dołącz do ostatniej sesji** i potwierdzić dodawanie kolejnych zdjęć do tego samego folderu.
+Lista pokazuje foldery bezpośrednio w DCIM, zawierające zdjęcia i cyfrę w nazwie, z pominięciem folderów aparatu. Najnowsze są na górze. Wpisz numer w wyszukiwarkę i dotknij folderu, aby otworzyć jego zdjęcia w aplikacji. Galeria obsługuje powiększanie, przesuwanie i kolejne zdjęcia.
 
-Stan zakończonej serii i postęp przypisywania są zapamiętywane. Nie zamykaj aplikacji podczas zapisu. Nieprzypisane zdjęcia pozostają w oryginalnym folderze; po odmowie zgody lub błędzie użyj **Dokończ przypisywanie zdjęć**. Serię można także zakończyć bez przypisywania — bez usuwania zdjęć.
+C/K mają wspólne nazwy liczbowe (`C13932` → `DCIM/13932/`), więc lista pokazuje rzeczywistą nazwę `13932`, bez zgadywania prefiksu. Pozostałe zachowują prefiks (`R14577` → `DCIM/R14577/`). Puste foldery nie są widoczne w MediaStore. Istniejące pliki nie są automatycznie reorganizowane.
 
-## Numery i foldery
-- `C14015-23` rozwija się do C14015…C14023; `C14568 c14578` daje dwa numery do wyboru.
-- `C14877/26` z przykładowej karty generatora daje C14877, bez roku.
-- C/K tracą prefiks w folderze: `K4567` → `DCIM/4567/`.
-- IEW/RIEW, R i Z zachowują prefiks. Format IEW/RIEW/R/Z wymaga numeru, bez separatora między prefiksem a numerem w wyniku. OCR normalizuje litery i backslash do slash; slash w pojedynczej nazwie folderu zastępuje `∕`, ponieważ `/` jest separatorem katalogów.
-- Zakresy powyżej 501 numerów i nietypowe formaty wymagają ręcznej korekty.
+Zakres `C14015-23` rozwija się do C14015…C14023; `C14877/26` daje C14877 bez roku. Slash należący do dalszej części niestandardowego numeru jest zapisywany w pojedynczej nazwie folderu jako `∕`. Galeria wybranej centrali uwzględnia stare warianty nazw z separatorem.
 
-## Jakość i galeria
-Zdjęcia powstają z jakością ustawioną w aparacie telefonu. Na Androidzie 11+ zmieniana jest wyłącznie lokalizacja pliku przez MediaStore; aplikacja nie przelicza pikseli. Na Androidzie 10 kopiowane są bajty udostępnione przez system, bez ponownego kodowania obrazu; Android może ukrywać metadane lokalizacji GPS.
+## Weryfikacja i ograniczenia
 
-Podczas fotografowania używaj podglądu fabrycznego aparatu. Po przypisaniu dostępna jest też galeria centrali: szczypanie powiększa, przesuwanie przesuwa, podwójne stuknięcie dopasowuje obraz. Kolejne zdjęcia wybiera się przyciskami. Pomniejszanie podglądu nie zmienia pliku zdjęcia.
+Zbudowano APK, uruchomiono Android Lint, testy parsera, reguł sesji i Robolectric: cykl życia, przenoszenie, poprawna kolumna daty, automatyczne sugestie, foldery i dekoder ręcznych znaków. Sprawdzono również renderowane podglądy ekranów. Model sprawdzono na publicznych danych i syntetycznych oznaczeniach; szczegóły w dokumentacji modelu.
 
-## Zweryfikowane i wymagające testu na telefonie
-- Lokalnie zbudowano APK v1.5 i uruchomiono Android Lint bez błędów. Przeszło 59 sprawdzeń parsera, 9 sprawdzeń adresu usługi OCR, 22 sprawdzenia reguł sesji oraz 10 testów cyklu życia i przenoszenia zdjęć w Robolectric. CI wykonuje te same kontrole.
-- Podpis APK v1.5 jest zgodny z udostępnionymi APK v1.3 i v1.4, ale nie z v1.1.
-- Nie testowano na fizycznym telefonie: uruchamiania aplikacji producenta, uprawnień MediaStore, przenoszenia zdjęć, skuteczności OCR i płynności. To wydanie testowe.
-- Android wybiera aplikację obsługującą standardowe uruchomienie aparatu; przy kilku aplikacjach może pokazać wybór. Dostępność obiektywów i funkcji zależy od telefonu i aparatu, nie od Climagold QC.
-- Wykrywane są nowe, ukończone obrazy w DCIM od rozpoczęcia sesji. System nie przekazuje identyfikatora „zdjęcie z naszej serii”. Inne zdjęcia w DCIM z datą wykonania w tym samym przedziale mogą także zostać przypisane; w czasie sesji używaj aparatu tylko do bieżącej centrali. Przy braku daty wykonania używana jest data dodania z dokładnością do sekundy. Pliki poza DCIM, filmy i część osobnych plików RAW nie są obsługiwane. Jeśli aparat jeszcze zapisuje zdjęcie, ponów wyszukiwanie.
-- Wymuszone zatrzymanie aplikacji, restart telefonu lub ograniczenia procesów tła producenta mogą uniemożliwić odebranie zdarzenia blokady. Nie testowano tego wydania na fizycznym telefonie.
-- Brak gwarancji 120 Hz; odświeżaniem fabrycznego aparatu zarządza producent. Nasz ekran prosi o 120 Hz, jeśli telefon udostępnia taki tryb.
-- APK jest podpisany kluczem debug do pilotażu; przed wdrożeniem produkcyjnym trzeba przygotować stały podpis wydawniczy. Artefakt CI może mieć inny podpis debug niż udostępniony APK.
+Nie testowano tej wersji na fizycznym telefonie ani na rzeczywistych zdjęciach ręcznych oznaczeń użytkownika. Wydanie pozostaje testowe. Zachowanie zewnętrznego aparatu, uprawnień i procesów w tle zależy od telefonu. Wymuszone zatrzymanie aplikacji lub restart może uniemożliwić odebranie blokady.
 
-Logo pochodzi z repozytorium GeneratorV47, format przykładowej karty z `przyklady/PL-1.86/C14877_PL.pdf`. Zdjęcia i OCR domyślnie pozostają na telefonie. Wyjątkiem jest jawne użycie opcjonalnego odczytu pisma ręcznego w chmurze.
+Wykrywanie serii opiera się na nowych zdjęciach w DCIM i czasie wykonania, z datą dodania jako rezerwą. Inne zdjęcia z tego samego przedziału też mogą zostać zakwalifikowane. Filmy, pliki poza DCIM i część osobnych RAW nie są obsługiwane. Przy opóźnionym zapisie aparatu ponów wyszukiwanie.
 
 ## Budowanie
+
 JDK 17, Android SDK 35, Gradle 8.9, katalog `climagold-qc`:
 
 ```sh
@@ -103,8 +68,8 @@ javac -d /tmp/qc-tests app/src/main/java/pl/climagold/qc/Numbers.java tests/Numb
 java -cp /tmp/qc-tests NumbersTest
 javac -d /tmp/qc-tests app/src/main/java/pl/climagold/qc/SessionWindow.java tests/SessionWindowTest.java
 java -cp /tmp/qc-tests SessionWindowTest
-javac -cp "$ANDROID_HOME/platforms/android-35/android.jar" -d /tmp/qc-tests app/src/main/java/pl/climagold/qc/HandwritingOcr.java tests/HandwritingEndpointTest.java
-java -cp "/tmp/qc-tests:$ANDROID_HOME/platforms/android-35/android.jar" pl.climagold.qc.HandwritingEndpointTest
 ```
 
-Workflow `.github/workflows/android.yml` buduje APK, uruchamia lint i testy parsera oraz udostępnia artefakt.
+Model jest dołączony do APK, nie wymaga trenowania podczas budowania aplikacji. Workflow `.github/workflows/android.yml` wykonuje kontrole i publikuje artefakt APK.
+
+Logo pochodzi z repozytorium GeneratorV47. Informacje o danych i licencji wag: `model/README.md` oraz dołączony `MODEL_LICENSE.txt`.

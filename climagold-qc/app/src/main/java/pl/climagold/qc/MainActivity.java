@@ -35,9 +35,12 @@ public class MainActivity extends ComponentActivity {
 
   androidx.camera.core.Camera camera;
   BroadcastReceiver unlockReceiver;
+  Runnable backAction;
+  boolean handwritingScan;
 
   public void onCreate(Bundle b) {
     super.onCreate(b);
+    getPreferences(0).edit().remove("ocrEndpoint").apply();
     nativeSession = new NativeSession(this);
     unlockReceiver =
         new BroadcastReceiver() {
@@ -87,7 +90,8 @@ public class MainActivity extends ComponentActivity {
                   return;
                 }
                 saveDraft();
-                home();
+                if (backAction != null) backAction.run();
+                else home();
               }
             });
     draft = b == null ? serial : b.getString("draft", serial);
@@ -116,6 +120,14 @@ public class MainActivity extends ComponentActivity {
   public void onRequestPermissionsResult(int request, String[] permissions, int[] grants) {
     super.onRequestPermissionsResult(request, permissions, grants);
     nativeSession.permissionResult(request);
+    if (request == 43) {
+      if (grants.length > 0 && grants[0] == android.content.pm.PackageManager.PERMISSION_GRANTED)
+        browseUnits();
+      else {
+        message("Do listy central potrzebny jest dostęp do zdjęć.");
+        home();
+      }
+    }
     if (request == 1) {
       if (grants.length > 0 && grants[0] == android.content.pm.PackageManager.PERMISSION_GRANTED)
         openCamera(true);
@@ -150,6 +162,7 @@ public class MainActivity extends ComponentActivity {
 
   void layout() {
     screenGeneration++;
+    backAction = this::home;
     input = null;
     root = new LinearLayout(this);
     root.setOrientation(LinearLayout.VERTICAL);
@@ -252,16 +265,27 @@ public class MainActivity extends ComponentActivity {
     capture = null;
     importedPhoto = null;
     layout();
+    backAction = this::finish;
     ImageView logo = new ImageView(this);
-    logo.setImageResource(pl.climagold.qc.R.drawable.climagold);
+    logo.setImageResource(R.drawable.climagold);
     logo.setContentDescription("Climagold");
     logo.setScaleType(ImageView.ScaleType.FIT_START);
-    root.addView(logo, new LinearLayout.LayoutParams(-1, dp(42)));
-    hint("KONTROLA JAKOŚCI  /  01 — WYBÓR NUMERU");
-    label("Dobra seria zaczyna się\nod właściwego numeru.");
-    hint(
-        "Zeskanuj oznaczenie, wczytaj zdjęcie lub wpisz numer. Potem zrób całą serię aparatem"
-            + " telefonu.");
+    root.addView(logo, new LinearLayout.LayoutParams(-1, dp(38)));
+    hint("DOKUMENTACJA ZDJĘCIOWA");
+    label("Co fotografujemy?");
+    hint("Wybierz centralę. Rób zdjęcia aparatem telefonu. Wróć tutaj, żeby zapisać serię.");
+    action("+  Nowa seria zdjęć", this::numberEntry, true);
+    button("Centrale i zdjęcia", this::browseUnits);
+    nativeSession.lastSessionCard();
+    hint("Zdjęcia i rozpoznawanie pozostają na telefonie.");
+    scrollable();
+  }
+
+  void numberEntry() {
+    layout();
+    hint("1  NUMER   ·   2  ZDJĘCIA   ·   3  ZAPIS");
+    label("Wybierz numer");
+    hint("Zeskanuj oznaczenie lub wpisz je poniżej.");
     action(
         "Skanuj numer aparatem",
         () -> {
@@ -270,57 +294,117 @@ public class MainActivity extends ComponentActivity {
         },
         true);
     button(
-        "Wczytaj zdjęcie z numerem",
+        "Wybierz zdjęcie z galerii",
         () -> {
           saveDraft();
           photoPicker.launch("image/*");
         });
-    label("Lub wpisz numer");
+    label("Wpisz oznaczenie");
     input = new EditText(this);
     input.setTextColor(Color.WHITE);
     input.setHintTextColor(MUTED);
-    input.setTextSize(18);
+    input.setTextSize(20);
     input.setPadding(dp(16), dp(14), dp(16), dp(14));
     input.setBackground(surface(SURFACE, 16));
-    input.setHint("np. C 14015, K 4567, IEW 123");
-    input.setContentDescription("Numer centrali lub oznaczenie");
+    input.setHint("np. C13932, IEW123, R14577");
+    input.setContentDescription("Oznaczenie centrali");
     input.setInputType(
         android.text.InputType.TYPE_CLASS_TEXT
             | android.text.InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS);
+    input.setSingleLine(true);
     input.setText(draft);
     root.addView(input, new LinearLayout.LayoutParams(-1, -2));
-    Switch mode = new Switch(this);
-    mode.setText("Numery ogólne (także bez prefiksu)");
-    mode.setTextColor(Color.WHITE);
-    mode.setTextSize(14);
-    mode.setPadding(0, dp(16), 0, dp(8));
-    mode.setMinHeight(dp(56));
-    mode.setChecked(generalNumbers);
-    mode.setOnCheckedChangeListener(
-        (v, checked) -> {
-          generalNumbers = checked;
-          getPreferences(0).edit().putBoolean("generalNumbers", checked).apply();
-        });
-    root.addView(mode);
-    hint(
-        "C — centrala, K — kompakt, IEW — inne zamówienie, RIEW — elementy automatyki; także R i Z."
-            + " Prefiks i numer obok tworzą oznaczenie. Czytelne ręczne znaki też możesz spróbować"
-            + " odczytać offline.");
+    LinearLayout proposals = new LinearLayout(this);
+    proposals.setOrientation(LinearLayout.VERTICAL);
+    root.addView(proposals);
+    Runnable refresh = () -> renderSuggestions(proposals, input, Collections.emptyList(), false);
+    input.addTextChangedListener(watcher(refresh));
+    refresh.run();
     action(
-        "Dalej · sprawdź numer",
+        "Dalej · rozpocznij serię",
         () -> {
           saveDraft();
           choose(draft);
         },
         true);
-    nativeSession.lastSessionCard();
-    if (!serial.isEmpty()) {
-      label("Centrala · " + serial);
-      button("Otwórz galerię", () -> gallery(0));
-      button("Rozpocznij nową serię dla " + serial, () -> confirm(serial));
-    }
-    hint("Zdjęcia w pełnej jakości • domyślnie OCR offline");
+    button(
+        "Inny format numeru",
+        () -> {
+          new android.app.AlertDialog.Builder(this)
+              .setTitle("Format oznaczenia")
+              .setSingleChoiceItems(
+                  new String[] {
+                    "Prefiks + numer: C, K, IEW, RIEW, R, Z", "Dowolne oznaczenie z cyframi"
+                  },
+                  generalNumbers ? 1 : 0,
+                  (d, w) -> {
+                    generalNumbers = w == 1;
+                    getPreferences(0).edit().putBoolean("generalNumbers", generalNumbers).apply();
+                    d.dismiss();
+                  })
+              .setNegativeButton("Wróć", null)
+              .show();
+        });
+    button("Wróć", this::home);
     scrollable();
+  }
+
+  android.text.TextWatcher watcher(Runnable changed) {
+    return new android.text.TextWatcher() {
+      public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+
+      public void onTextChanged(CharSequence s, int start, int before, int count) {
+        changed.run();
+      }
+
+      public void afterTextChanged(android.text.Editable s) {}
+    };
+  }
+
+  void renderSuggestions(LinearLayout list, EditText field, List<String> extra, boolean ocr) {
+    list.removeAllViews();
+    LinkedHashSet<String> values =
+        new LinkedHashSet<>(
+            ocr
+                ? Numbers.ocrSuggestions(field.getText().toString())
+                : (generalNumbers
+                    ? Numbers.parseGeneral(field.getText().toString())
+                    : Numbers.parse(field.getText().toString())));
+    values.addAll(extra);
+    if (values.isEmpty()) return;
+    TextView title = new TextView(this);
+    title.setText("Propozycje — sprawdź z oznaczeniem");
+    title.setTextColor(GOLD);
+    title.setTextSize(14);
+    title.setPadding(0, dp(14), 0, dp(4));
+    list.addView(title);
+    int count = 0;
+    for (String value : values) {
+      if (count++ >= 12) break;
+      Button choice = new Button(this);
+      choice.setText(value);
+      choice.setAllCaps(false);
+      choice.setTextSize(19);
+      choice.setTextColor(Color.WHITE);
+      choice.setMinHeight(dp(48));
+      choice.setBackground(
+          new android.graphics.drawable.RippleDrawable(
+              android.content.res.ColorStateList.valueOf(0x33FFFFFF), surface(SURFACE, 12), null));
+      LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
+      lp.topMargin = dp(6);
+      list.addView(choice, lp);
+      choice.setOnClickListener(
+          v -> {
+            field.setText(value);
+            field.setSelection(field.length());
+          });
+    }
+    if (values.size() > 12) {
+      TextView more = new TextView(this);
+      more.setText("Więcej numerów: wybierz Dalej.");
+      more.setTextColor(MUTED);
+      list.addView(more);
+    }
   }
 
   void saveDraft() {
@@ -338,8 +422,12 @@ public class MainActivity extends ComponentActivity {
           .show();
       return;
     }
+    if (options.size() == 1) {
+      confirm(options.get(0));
+      return;
+    }
     new android.app.AlertDialog.Builder(this)
-        .setTitle("Wybierz i zatwierdź numer")
+        .setTitle("Wybierz numer")
         .setItems(options.toArray(new String[0]), (d, w) -> confirm(options.get(w)))
         .show();
   }
@@ -370,11 +458,11 @@ public class MainActivity extends ComponentActivity {
         .setMessage(
             (exists
                     ? "Ten numer ma już zdjęcia. Nowe zapiszę w folderze poniżej. Galeria obejmuje"
-                          + " też wcześniejsze foldery tego oznaczenia.\n"
+                        + " też wcześniejsze foldery tego oznaczenia.\n"
                     : "Nowa seria zdjęć.\n")
                 + path)
         .setPositiveButton(
-            "Rozpocznij",
+            "Rób zdjęcia",
             (d, w) -> {
               serial = value;
               draft = value;
@@ -397,7 +485,21 @@ public class MainActivity extends ComponentActivity {
       return;
     }
     layout();
-    label("Zeskanuj oznaczenie");
+    label("Numer centrali");
+    RadioGroup modes = new RadioGroup(this);
+    modes.setOrientation(RadioGroup.HORIZONTAL);
+    RadioButton printed = new RadioButton(this), handwritten = new RadioButton(this);
+    printed.setId(View.generateViewId());
+    handwritten.setId(View.generateViewId());
+    printed.setText("Wydruk");
+    handwritten.setText("Pismo ręczne");
+    printed.setTextColor(Color.WHITE);
+    handwritten.setTextColor(Color.WHITE);
+    modes.addView(printed);
+    modes.addView(handwritten);
+    modes.check(handwritingScan ? handwritten.getId() : printed.getId());
+    modes.setOnCheckedChangeListener((g, id) -> handwritingScan = id == handwritten.getId());
+    root.addView(modes);
     hint("Wypełnij kadr numerem. Stuknij, aby ustawić ostrość; rozsuń palce, aby przybliżyć.");
     final int generation = screenGeneration;
     PreviewView preview = new PreviewView(this);
@@ -505,7 +607,16 @@ public class MainActivity extends ComponentActivity {
                 android.graphics.Bitmap bitmap = image.toBitmap();
                 int rotation = image.getImageInfo().getRotationDegrees();
                 image.close();
-                readOffline(bitmap, rotation, true);
+                if (handwritingScan) {
+                  android.graphics.Matrix matrix = new android.graphics.Matrix();
+                  matrix.postRotate(rotation);
+                  android.graphics.Bitmap rotated =
+                      android.graphics.Bitmap.createBitmap(
+                          bitmap, 0, 0, bitmap.getWidth(), bitmap.getHeight(), matrix, true);
+                  if (rotated != bitmap) bitmap.recycle();
+                  busy = false;
+                  showHandwritingCrop(rotated);
+                } else readOffline(bitmap, rotation, true);
               } catch (Exception | OutOfMemoryError e) {
                 image.close();
                 busy = false;
@@ -528,77 +639,125 @@ public class MainActivity extends ComponentActivity {
   }
 
   void reviewText(String text, String contrastText) {
+    reviewText(text, Numbers.ocrSuggestions(contrastText));
+  }
+
+  void reviewText(String text, List<String> candidates) {
     EditText correction = new EditText(this);
     correction.setText(text);
-    correction.setHint("Wpisz lub popraw odczytany numer");
+    correction.setHint("Wpisz lub popraw oznaczenie");
+    correction.setTextSize(20);
     correction.setInputType(
         android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE);
-    correction.setMinLines(2);
-    correction.setMaxLines(6);
-    correction.setPadding(dp(20), dp(16), dp(20), dp(16));
+    correction.setMinLines(1);
+    correction.setMaxLines(4);
     LinearLayout review = new LinearLayout(this);
     review.setOrientation(LinearLayout.VERTICAL);
-    review.setPadding(dp(20), 0, dp(20), dp(12));
+    review.setPadding(dp(20), dp(8), dp(20), dp(12));
+    LinearLayout proposals = new LinearLayout(this);
+    proposals.setOrientation(LinearLayout.VERTICAL);
+    review.addView(proposals);
+    TextView label = new TextView(this);
+    label.setText("Numer do zatwierdzenia");
+    label.setTextColor(MUTED);
+    label.setPadding(0, dp(16), 0, 0);
+    review.addView(label);
     review.addView(correction);
-    TextView types = new TextView(this);
-    types.setText(
-        "C — centrala · K — kompakt\nIEW — inne zamówienie\nRIEW — elementy automatyki · R · Z");
-    types.setTextColor(MUTED);
-    types.setPadding(0, dp(8), 0, dp(8));
-    review.addView(types);
-    Button suggestions = new Button(this);
-    suggestions.setText("Podpowiedz oznaczenie C / K / IEW / RIEW / R / Z");
-    suggestions.setAllCaps(false);
-    suggestions.setOnClickListener(
-        v -> {
-          LinkedHashSet<String> candidates =
-              new LinkedHashSet<>(Numbers.ocrSuggestions(correction.getText().toString()));
-          candidates.addAll(Numbers.ocrSuggestions(contrastText));
-          if (candidates.isEmpty()) {
-            message(
-                "Nie znaleziono prefiksu z numerem obok. Popraw tekst lub zrób wyraźniejsze"
-                    + " zdjęcie.");
-            return;
-          }
-          String[] values = candidates.toArray(new String[0]);
-          new android.app.AlertDialog.Builder(this)
-              .setTitle("Sugestie — porównaj ze zdjęciem")
-              .setItems(
-                  values,
-                  (d, which) -> {
-                    correction.setText(values[which]);
-                    correction.setSelection(correction.length());
-                  })
-              .setNegativeButton("Wróć", null)
-              .show();
-        });
-    review.addView(suggestions);
-    Switch mode = new Switch(this);
-    mode.setText("Numery ogólne, bez prefiksu");
-    mode.setMinHeight(dp(56));
-    mode.setChecked(generalNumbers);
-    mode.setOnCheckedChangeListener(
-        (v, checked) -> {
-          generalNumbers = checked;
-          getPreferences(0).edit().putBoolean("generalNumbers", checked).apply();
-        });
-    review.addView(mode);
+    Runnable refresh = () -> renderSuggestions(proposals, correction, candidates, true);
+    correction.addTextChangedListener(watcher(refresh));
+    refresh.run();
     ScrollView scroll = new ScrollView(this);
     scroll.addView(review);
     new android.app.AlertDialog.Builder(this)
-        .setTitle("Sprawdź odczyt")
+        .setTitle("Sprawdź numer")
         .setMessage(
-            "Sprawdź prefiks i numer obok niego. Podpowiedzi mogą zamieniać O/0, I/1, S/5, B/8 i"
-                + " Z/2. Nie są pewnym odczytem — porównaj każdy znak z oryginałem.")
+            "Wybierz propozycję lub popraw znaki. To podpowiedzi — sprawdź prefiks i każdą cyfrę.")
         .setView(scroll)
         .setPositiveButton(
-            "Wybierz numer",
+            "Dalej",
             (d, w) -> {
               draft = correction.getText().toString();
               choose(draft);
             })
         .setNegativeButton("Wróć", null)
         .show();
+  }
+
+  void showHandwritingCrop(android.graphics.Bitmap bitmap) {
+    if (bitmap == null) {
+      message("Najpierw wybierz zdjęcie");
+      return;
+    }
+    if (provider != null) provider.unbindAll();
+    capture = null;
+    importedPhoto = bitmap;
+    layout();
+    label("Zaznacz oznaczenie");
+    hint(
+        "Przeciągnij palcem wokół jednego wiersza: prefiks i cyfry. Najlepiej czytelne, oddzielne"
+            + " znaki na jasnym tle.");
+    NumberCropView crop = new NumberCropView(this, bitmap);
+    root.addView(crop, new LinearLayout.LayoutParams(-1, 0, 1));
+    status = new TextView(this);
+    status.setTextColor(MUTED);
+    root.addView(status);
+    action(
+        "Rozpoznaj pismo ręczne",
+        () -> {
+          android.graphics.Bitmap selected;
+          try {
+            selected = crop.crop();
+          } catch (Exception e) {
+            message(e.getMessage());
+            return;
+          }
+          busy = true;
+          status.setText("Odczyt liter i cyfr na telefonie…");
+          new Thread(
+                  () -> {
+                    try {
+                      List<IdentifierDecoder.Candidate> results =
+                          HandwrittenRecognizer.recognize(this, selected);
+                      List<String> candidates = new ArrayList<>();
+                      for (var result : results) candidates.add(result.text);
+                      runOnUiThread(
+                          () -> {
+                            busy = false;
+                            if (isDestroyed()) return;
+                            if (candidates.isEmpty()) {
+                              status.setText(
+                                  "Brak pewnego odczytu. Zaznacz ciaśniej lub wpisz numer.");
+                              return;
+                            }
+                            status.setText("Sprawdź odczytany prefiks i cyfry.");
+                            reviewText(candidates.get(0), candidates);
+                          });
+                    } catch (Exception | OutOfMemoryError e) {
+                      runOnUiThread(
+                          () -> {
+                            busy = false;
+                            if (!isDestroyed())
+                              status.setText(
+                                  e.getMessage() == null
+                                      ? "Nie odczytano oznaczenia. Spróbuj ciaśniejszego kadru."
+                                      : e.getMessage());
+                          });
+                    } finally {
+                      if (selected != bitmap) selected.recycle();
+                    }
+                  },
+                  "handwritten-number")
+              .start();
+        },
+        true);
+    button("Zaznacz całe zdjęcie", crop::reset);
+    button(
+        "Wpisz numer ręcznie",
+        () -> {
+          draft = "";
+          numberEntry();
+        });
+    button("Wróć", this::numberEntry);
   }
 
   void importPhoto(Uri uri) {
@@ -616,7 +775,7 @@ public class MainActivity extends ComponentActivity {
     status.setText("Wczytywanie zdjęcia…");
     root.addView(status);
     action("Odczytaj numer ze zdjęcia", this::recognizeImported, true);
-    button("Pismo ręczne · OCR w chmurze", this::handwritingDialog);
+    button("Odczytaj pismo ręczne", () -> showHandwritingCrop(importedPhoto));
     button("Wybierz inne zdjęcie", () -> photoPicker.launch("image/*"));
     button("Wróć", this::home);
     importedPhoto = null;
@@ -661,94 +820,6 @@ public class MainActivity extends ComponentActivity {
         .start();
   }
 
-  void handwritingDialog() {
-    if (importedPhoto == null) {
-      message("Najpierw wczytaj zdjęcie");
-      return;
-    }
-    LinearLayout fields = new LinearLayout(this);
-    fields.setOrientation(LinearLayout.VERTICAL);
-    fields.setPadding(dp(24), dp(8), dp(24), 0);
-    EditText endpoint = new EditText(this);
-    endpoint.setHint("Adres usługi Azure AI Vision (HTTPS)");
-    endpoint.setContentDescription("Adres usługi Azure AI Vision");
-    endpoint.setInputType(
-        android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_URI);
-    endpoint.setText(getPreferences(0).getString("ocrEndpoint", ""));
-    fields.addView(endpoint);
-    EditText key = new EditText(this);
-    key.setHint("Klucz usługi (nie jest zapisywany)");
-    key.setContentDescription("Klucz usługi Azure AI Vision");
-    key.setInputType(
-        android.text.InputType.TYPE_CLASS_TEXT
-            | android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD);
-    key.setImportantForAutofill(View.IMPORTANT_FOR_AUTOFILL_NO);
-    fields.addView(key);
-    ScrollView scroll = new ScrollView(this);
-    scroll.addView(fields);
-    var dialog =
-        new android.app.AlertDialog.Builder(this)
-            .setTitle("Odczyt pisma ręcznego")
-            .setMessage(
-                "Opcjonalna usługa Azure AI Vision Read rozpoznaje także pismo ręczne. Wymaga"
-                    + " własnego zasobu Azure i może być płatna. Wyślesz całe wybrane zdjęcie do"
-                    + " tej usługi. Wynik zawsze sprawdź przed zatwierdzeniem.")
-            .setView(scroll)
-            .setPositiveButton("Wyślij i odczytaj", null)
-            .setNegativeButton("Anuluj", null)
-            .create();
-    dialog.setOnShowListener(
-        d ->
-            dialog
-                .getButton(-1)
-                .setOnClickListener(
-                    v -> {
-                      java.net.URI address;
-                      try {
-                        address = HandwritingOcr.endpoint(endpoint.getText().toString());
-                      } catch (Exception e) {
-                        endpoint.setError("Wpisz https://NAZWA.cognitiveservices.azure.com/");
-                        return;
-                      }
-                      String secret = key.getText().toString().trim();
-                      if (secret.isEmpty() || secret.contains("\n") || secret.contains("\r")) {
-                        key.setError("Wpisz poprawny klucz usługi");
-                        return;
-                      }
-                      getPreferences(0).edit().putString("ocrEndpoint", address.toString()).apply();
-                      key.setText("");
-                      dialog.dismiss();
-                      busy = true;
-                      status.setText("Odczyt pisma ręcznego w chmurze…");
-                      android.graphics.Bitmap photo = importedPhoto;
-                      new Thread(
-                              () -> {
-                                try {
-                                  String text = HandwritingOcr.read(photo, address, secret);
-                                  runOnUiThread(
-                                      () -> {
-                                        busy = false;
-                                        if (isDestroyed()) return;
-                                        status.setText(
-                                            "Odczyt zakończony. Sprawdź znaki i wybierz numer.");
-                                        reviewText(text);
-                                      });
-                                } catch (Exception e) {
-                                  runOnUiThread(
-                                      () -> {
-                                        busy = false;
-                                        if (!isDestroyed())
-                                          status.setText(
-                                              "Nie udało się odczytać: " + e.getMessage());
-                                      });
-                                }
-                              },
-                              "handwriting-ocr")
-                          .start();
-                    }));
-    dialog.show();
-  }
-
   void recognizeImported() {
     if (importedPhoto == null || busy) return;
     busy = true;
@@ -779,39 +850,194 @@ public class MainActivity extends ComponentActivity {
         });
   }
 
-  void gallery(int requested) {
-    if (provider != null) provider.unbindAll();
-    capture = null;
-    ArrayList<Uri> photos = new ArrayList<>();
-    List<String> paths = Numbers.folderPaths(serial);
-    try (android.database.Cursor c =
-        getContentResolver()
-            .query(
-                MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
-                new String[] {"_id"},
-                "relative_path IN ("
-                    + String.join(",", Collections.nCopies(paths.size(), "?"))
-                    + ")",
-                paths.toArray(new String[0]),
-                "date_added DESC")) {
-      if (c != null)
-        while (c.moveToNext())
-          photos.add(
-              ContentUris.withAppendedId(
-                  MediaStore.Images.Media.EXTERNAL_CONTENT_URI, c.getLong(0)));
-    } catch (Exception e) {
-      message(e.toString());
+  void browseUnits() {
+    String permission =
+        android.os.Build.VERSION.SDK_INT >= 33
+            ? Manifest.permission.READ_MEDIA_IMAGES
+            : Manifest.permission.READ_EXTERNAL_STORAGE;
+    if (checkSelfPermission(permission) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+      requestPermissions(new String[] {permission}, 43);
       return;
     }
+    if (provider != null) provider.unbindAll();
+    capture = null;
+    layout();
+    label("Centrale");
+    hint("Wybierz folder, aby zobaczyć zdjęcia.");
+    EditText search = new EditText(this);
+    search.setHint("Szukaj numeru lub folderu");
+    search.setTextColor(Color.WHITE);
+    search.setHintTextColor(MUTED);
+    search.setSingleLine(true);
+    search.setPadding(dp(16), dp(12), dp(16), dp(12));
+    search.setBackground(surface(SURFACE, 14));
+    root.addView(search, new LinearLayout.LayoutParams(-1, -2));
+    ScrollView scroll = new ScrollView(this);
+    LinearLayout list = new LinearLayout(this);
+    list.setOrientation(LinearLayout.VERTICAL);
+    scroll.addView(list);
+    root.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
+    TextView loading = new TextView(this);
+    loading.setText("Wczytywanie folderów…");
+    loading.setTextColor(MUTED);
+    loading.setPadding(0, dp(20), 0, 0);
+    list.addView(loading);
+    button(nativeSession.active() ? "Wróć do serii" : "Wróć", this::home);
+    final int generation = screenGeneration;
+    new Thread(
+            () -> {
+              try {
+                List<String> paths = new ArrayList<>();
+                List<Long> dates = new ArrayList<>();
+                try (android.database.Cursor c =
+                    getContentResolver()
+                        .query(
+                            MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                            new String[] {
+                              MediaStore.Images.Media.RELATIVE_PATH,
+                              MediaStore.Images.Media.DATE_ADDED
+                            },
+                            "is_pending=0"
+                                + (android.os.Build.VERSION.SDK_INT >= 30
+                                    ? " AND is_trashed=0"
+                                    : ""),
+                            null,
+                            null)) {
+                  if (c == null) throw new java.io.IOException("Nie odczytano folderów");
+                  while (c.moveToNext()) {
+                    paths.add(c.getString(0));
+                    dates.add(c.getLong(1));
+                  }
+                }
+                List<UnitFolders.Entry> entries = UnitFolders.group(paths, dates);
+                runOnUiThread(
+                    () -> {
+                      if (isDestroyed() || generation != screenGeneration) return;
+                      Runnable render =
+                          () -> {
+                            list.removeAllViews();
+                            String query =
+                                search.getText().toString().trim().toLowerCase(Locale.ROOT);
+                            int count = 0;
+                            for (UnitFolders.Entry entry : entries) {
+                              if (!entry.name.toLowerCase(Locale.ROOT).contains(query)) continue;
+                              count++;
+                              Button row = new Button(this);
+                              row.setAllCaps(false);
+                              row.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
+                              row.setText(
+                                  entry.name + "   ›\n" + entry.count + " zdjęć  ·  " + entry.path);
+                              row.setTextColor(Color.WHITE);
+                              row.setTextSize(17);
+                              row.setPadding(dp(18), dp(16), dp(18), dp(16));
+                              row.setBackground(
+                                  new android.graphics.drawable.RippleDrawable(
+                                      android.content.res.ColorStateList.valueOf(0x33FFFFFF),
+                                      surface(SURFACE, 18),
+                                      null));
+                              LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
+                              lp.topMargin = dp(12);
+                              list.addView(row, lp);
+                              row.setOnClickListener(
+                                  v ->
+                                      showGallery(
+                                          entry.name,
+                                          Collections.singletonList(entry.path),
+                                          0,
+                                          true));
+                            }
+                            if (count == 0) {
+                              TextView empty = new TextView(this);
+                              empty.setText(
+                                  entries.isEmpty()
+                                      ? "Nie ma jeszcze folderów central ze zdjęciami. Rozpocznij"
+                                            + " pierwszą serię."
+                                      : "Brak folderu o takim numerze.");
+                              empty.setTextColor(MUTED);
+                              empty.setPadding(0, dp(20), 0, 0);
+                              list.addView(empty);
+                            }
+                          };
+                      search.addTextChangedListener(watcher(render));
+                      render.run();
+                    });
+              } catch (Exception e) {
+                runOnUiThread(
+                    () -> {
+                      if (generation == screenGeneration)
+                        loading.setText("Nie udało się wczytać folderów. Wróć i spróbuj ponownie.");
+                    });
+              }
+            },
+            "unit-folders")
+        .start();
+  }
+
+  void gallery(int requested) {
+    showGallery(serial, Numbers.folderPaths(serial), requested, false);
+  }
+
+  void showGallery(String name, List<String> paths, int requested, boolean fromBrowser) {
+    if (provider != null) provider.unbindAll();
+    capture = null;
+    layout();
+    label(name);
+    hint("Wczytywanie zdjęć…");
+    backAction = fromBrowser ? this::browseUnits : this::home;
+    button("Wróć", backAction);
+    final int generation = screenGeneration;
+    new Thread(
+            () -> {
+              ArrayList<Uri> photos = new ArrayList<>();
+              try (android.database.Cursor c =
+                  getContentResolver()
+                      .query(
+                          MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                          new String[] {MediaStore.Images.Media._ID},
+                          "relative_path IN ("
+                              + String.join(",", Collections.nCopies(paths.size(), "?"))
+                              + ") AND is_pending=0"
+                              + (android.os.Build.VERSION.SDK_INT >= 30 ? " AND is_trashed=0" : ""),
+                          paths.toArray(new String[0]),
+                          "date_added DESC")) {
+                if (c == null) throw new java.io.IOException();
+                while (c.moveToNext())
+                  photos.add(
+                      ContentUris.withAppendedId(
+                          MediaStore.Images.Media.EXTERNAL_CONTENT_URI, c.getLong(0)));
+                runOnUiThread(
+                    () -> {
+                      if (!isDestroyed() && generation == screenGeneration)
+                        displayGallery(name, paths, photos, requested, fromBrowser);
+                    });
+              } catch (Exception e) {
+                runOnUiThread(
+                    () -> {
+                      if (generation == screenGeneration)
+                        message("Nie odczytano zdjęć. Sprawdź dostęp do galerii.");
+                    });
+              }
+            },
+            "gallery-list")
+        .start();
+  }
+
+  void displayGallery(
+      String name, List<String> paths, List<Uri> photos, int requested, boolean fromBrowser) {
+    layout();
+    backAction = fromBrowser ? this::browseUnits : this::home;
     if (photos.isEmpty()) {
-      message("Brak zdjęć tej centrali");
+      label(name);
+      hint("Ten folder nie zawiera dostępnych zdjęć.");
+      button("Wróć", backAction);
       return;
     }
     int index = Math.max(0, Math.min(requested, photos.size() - 1));
-    layout();
-    label(serial + " • " + (index + 1) + " / " + photos.size());
+    label(name + "   ·   " + (index + 1) + " / " + photos.size());
     PhotoView photo = new PhotoView(this);
+    photo.setContentDescription("Zdjęcie " + (index + 1) + " centrali " + name);
     root.addView(photo, new LinearLayout.LayoutParams(-1, 0, 1));
+    final int generation = screenGeneration;
     new Thread(
             () -> {
               try {
@@ -825,18 +1051,32 @@ public class MainActivity extends ComponentActivity {
                         });
                 runOnUiThread(
                     () -> {
+                      if (isDestroyed() || generation != screenGeneration) {
+                        bitmap.recycle();
+                        return;
+                      }
                       photo.setImageBitmap(bitmap);
                       photo.post(photo::fit);
                     });
-              } catch (Exception e) {
-                runOnUiThread(() -> message("Nie można otworzyć zdjęcia"));
+              } catch (Exception | OutOfMemoryError e) {
+                runOnUiThread(
+                    () -> {
+                      if (generation == screenGeneration) message("Nie otwarto zdjęcia");
+                    });
               }
-            })
+            },
+            "gallery-photo")
         .start();
-    button("Poprzednie", () -> gallery(index - 1));
-    button("Następne", () -> gallery(index + 1));
-    button("Wróć do aparatu", () -> openCamera(false));
-    button("Zakończ", () -> home());
+    if (index > 0)
+      button(
+          "‹  Poprzednie zdjęcie",
+          () -> displayGallery(name, paths, photos, index - 1, fromBrowser));
+    if (index + 1 < photos.size())
+      button(
+          "Następne zdjęcie  ›", () -> displayGallery(name, paths, photos, index + 1, fromBrowser));
+    button(
+        fromBrowser ? "Wróć do central" : nativeSession.active() ? "Wróć do serii" : "Wróć",
+        backAction);
   }
 
   void message(String text) {

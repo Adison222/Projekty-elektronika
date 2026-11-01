@@ -179,6 +179,63 @@ public class SessionMonitorServiceTest {
     controller.pause().stop().destroy();
   }
 
+  @Test
+  public void scanUsesRealMediaStoreDateColumn() throws Exception {
+    final java.util.List<String> columns = new java.util.ArrayList<>();
+    android.content.ContentProvider provider =
+        new android.content.ContentProvider() {
+          public boolean onCreate() {
+            return true;
+          }
+
+          public String getType(android.net.Uri u) {
+            return "image/jpeg";
+          }
+
+          public android.database.Cursor query(
+              android.net.Uri u,
+              String[] projection,
+              String selection,
+              String[] args,
+              String sort) {
+            columns.addAll(java.util.Arrays.asList(projection));
+            for (String column : projection)
+              if (column.equals("date_taken"))
+                throw new IllegalArgumentException("Invalid column date_taken");
+            android.database.MatrixCursor cursor = new android.database.MatrixCursor(projection);
+            cursor.addRow(new Object[] {11L, "DCIM/Camera/", 4000L, 4L, 0});
+            return cursor;
+          }
+
+          public android.net.Uri insert(android.net.Uri u, android.content.ContentValues v) {
+            return null;
+          }
+
+          public int delete(android.net.Uri u, String s, String[] a) {
+            return 0;
+          }
+
+          public int update(
+              android.net.Uri u, android.content.ContentValues v, String s, String[] a) {
+            return 0;
+          }
+        };
+    org.robolectric.shadows.ShadowContentResolver.registerProviderInternal("media", provider);
+    seedPendingBatch();
+    Shadows.shadowOf(RuntimeEnvironment.getApplication())
+        .grantPermissions(android.Manifest.permission.READ_MEDIA_IMAGES);
+    var controller = Robolectric.buildActivity(MainActivity.class).create().start().resume();
+    controller.get().nativeSession.finish("Retry after upgrade");
+    awaitTransfer(controller.get().nativeSession);
+    assertTrue(columns.contains(android.provider.MediaStore.Images.Media.DATE_TAKEN));
+    assertFalse(columns.contains("date_taken"));
+    assertTrue(
+        prefs
+            .getStringSet("pending", java.util.Set.of())
+            .contains("content://media/external/images/media/11"));
+    controller.pause().stop().destroy();
+  }
+
   private void seedPendingBatch() {
     java.util.Set<String> uris =
         java.util.Set.of(
