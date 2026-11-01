@@ -1,6 +1,12 @@
-# Climagold QC — v1.4 preview: automatyczne kończenie i wznawianie serii
+# Climagold QC — v1.5 preview: oznaczenia bez separatora i prefiks R
 
 Android 10+. **Serię zdjęć wykonuje normalna aplikacja aparatu telefonu**, otwierana przez `INTENT_ACTION_STILL_IMAGE_CAMERA`. Zachowuje swój interfejs, przyciski obiektywów 2×/3×, flesz i pozostałe funkcje dostępne na danym telefonie. Climagold QC nie zastępuje tego aparatu. Wbudowany podgląd CameraX służy wyłącznie do skanowania numeru z karty lub naklejki.
+
+## Co nowego w 1.5
+- Dodano prefiks **R**, np. `R14577`, także w OCR, zakresach i przy ręcznym wpisywaniu. Folder zachowuje pełną nazwę `DCIM/R14577/`.
+- Między literami prefiksu a numerem nie ma separatora: `IEW123`, `RIEW123`, `Z123`, `R14577`. Stary zapis `IEW/123` lub `RIEW 123` jest przyjmowany na wejściu i normalizowany do poprawnego oznaczenia.
+- Nowe zdjęcia trafiają do folderów bez separatora po prefiksie. Zapamiętane oznaczenia otwartej i ostatniej sesji są normalizowane; stan przypisywania pozostaje zachowany.
+- Galeria i sprawdzanie wcześniejszych zdjęć uwzględniają też stare foldery, np. `IEW∕123`. Nie przenosimy automatycznie wcześniejszych plików. Slash wewnątrz dalszej części identyfikatora, np. w `IEW123/26`, pozostaje częścią identyfikatora i jest kodowany w nazwie folderu jako `∕`.
 
 ## Co nowego w 1.4 — koniec i wznowienie sesji
 - Powrót z aparatu do aplikacji (Wstecz albo przełącznik aplikacji) automatycznie zamyka przedział czasowy serii i rozpoczyna przypisywanie zdjęć, bez dodatkowego przycisku wyboru serii.
@@ -17,14 +23,16 @@ Aplikacja traktuje prefiks i numer obok niego jako jedno oznaczenie:
 | --- | --- | --- |
 | C | Centrala | `C 12345` → `C12345` |
 | K | Kompakt | `K 0042` → `K0042` |
-| IEW | Inne zamówienie | `IEW 123` → `IEW/123` |
-| RIEW | Inne zamówienie elementów automatyki | `RIEW123` → `RIEW/123` |
+| IEW | Inne zamówienie | `IEW 123` → `IEW123` |
+| RIEW | Inne zamówienie elementów automatyki | `RIEW123` → `RIEW123` |
+| R | Prefiks R | `R 14577` → `R14577` |
+| Z | Prefiks Z | `Z 123` → `Z123` |
 
-Numer może być przyklejony do prefiksu lub oddzielony spacją. IEW/RIEW obsługują także slash i dwukropek; wynik jest ujednolicany do slasha. Zera wiodące są zachowywane. Prefiks bez numeru i same liczby z tabliczki nie tworzą oznaczenia w trybie centrali. Nie łączymy prefiksu z numerem z innego wiersza.
+Numer może być przyklejony do prefiksu lub oddzielony spacją. IEW/RIEW/R/Z przyjmują także stary zapis z separatorem; wynik nie zawiera separatora między prefiksem a cyframi. Zera wiodące są zachowywane. Prefiks bez numeru i same liczby z tabliczki nie tworzą oznaczenia w trybie centrali. Nie łączymy prefiksu z numerem z innego wiersza.
 
 Skaner i import zdjęć wykonują **dwa odczyty offline**: oryginału i obrazu w skali szarości z podniesionym kontrastem. Możesz spróbować czytelnych ręcznych liter drukowanych i osobnych cyfr. To nadal ML Kit, a nie model wytrenowany specjalnie na piśmie ręcznym; bez przykładowych zdjęć z pracy nie potwierdzono skuteczności tej metody.
 
-W ekranie **Sprawdź odczyt** wybierz **Podpowiedz oznaczenie C / K / IEW / RIEW**. Podpowiedzi szukają znanego prefiksu i numeru obok oraz proponują korekty `O→0`, `I/L/|→1`, `S→5`, `B→8`, `Z→2` w części liczbowej. Mogą także odczytać `R1EW` jako `RIEW`. Wymagana jest co najmniej jedna rzeczywiście rozpoznana cyfra. Sugestia dopiero po wybraniu trafia do pola edycji — **porównaj ją z oryginałem** przed zatwierdzeniem. Ręcznie wpisany numer nie podlega tym zamianom. Brak wyniku oznacza konieczność poprawienia oznaczenia lub wykonania wyraźniejszego zdjęcia, a nie automatyczne wysłanie do chmury.
+W ekranie **Sprawdź odczyt** wybierz **Podpowiedz oznaczenie C / K / IEW / RIEW / R / Z**. Podpowiedzi szukają znanego prefiksu i numeru obok oraz proponują korekty `O→0`, `I/L/|→1`, `S→5`, `B→8`, `Z→2` w części liczbowej. Mogą także odczytać `R1EW` jako `RIEW`. Wymagana jest co najmniej jedna rzeczywiście rozpoznana cyfra. Sugestia dopiero po wybraniu trafia do pola edycji — **porównaj ją z oryginałem** przed zatwierdzeniem. Ręcznie wpisany numer nie podlega tym zamianom. Brak wyniku oznacza konieczność poprawienia oznaczenia lub wykonania wyraźniejszego zdjęcia, a nie automatyczne wysłanie do chmury.
 
 ## Co nowego w 1.2
 - Nowy, granatowo-złoty interfejs, przewijany ekran główny, czytelna hierarchia akcji, przyciski z efektem dotyku i animowane przejścia. Animacje respektują systemowe wyłączenie animacji.
@@ -44,11 +52,11 @@ Domyślny ML Kit działa offline i najlepiej rozpoznaje druk. Nie zapewnia nieza
 Zapamiętywany jest tylko adres usługi. Klucz jest używany w pamięci do jednej operacji, bez zapisu na dysku, w logach i repozytorium. W tej wersji chmurowy odczyt jest dostępny dla importowanego zdjęcia; skaner na żywo korzysta z OCR offline. Nie skonfigurowano konta Azure i nie wykonano odczytu na rzeczywistej usłudze podczas prac nad tą wersją.
 
 ## Instalacja
-[**Pobierz Climagold-QC-v1.4-preview.apk**](../releases/Climagold-QC-v1.4-preview.apk?raw=true) — gotowy plik dla Androida 10+ z bieżącej wersji źródeł 1.4. Suma kontrolna znajduje się w `releases/SHA256SUMS`.
+[**Pobierz Climagold-QC-v1.5-preview.apk**](../releases/Climagold-QC-v1.5-preview.apk?raw=true) — gotowy plik dla Androida 10+ z bieżącej wersji źródeł 1.5. Suma kontrolna znajduje się w `releases/SHA256SUMS`.
 
-Zweryfikowano podpis APK: **v1.4 ma ten sam podpis co udostępniony APK v1.3** i może być zainstalowany jako jego aktualizacja, bez odinstalowywania. Podpis jest inny niż historycznego APK v1.1. Zakończ aktywną serię przed aktualizacją. Nie usuwaj aplikacji z otwartą sesją; zmiana instalacji może usunąć jej stan.
+Zweryfikowano podpis APK: **v1.5 ma ten sam podpis co udostępnione APK v1.3 i v1.4** i może być zainstalowany jako ich aktualizacja, bez odinstalowywania. Podpis jest inny niż historycznego APK v1.1. Zakończ aktywną serię przed aktualizacją. Nie usuwaj aplikacji z otwartą sesją; zmiana instalacji może usunąć jej stan.
 
-GitHub Actions nadal buduje artefakt `Climagold-QC-v1.4-preview-apk`. Historyczny [APK v1.1](../releases/Climagold-QC-v1.1-preview.apk) nie zawiera nowych funkcji.
+GitHub Actions nadal buduje artefakt `Climagold-QC-v1.5-preview-apk`. Historyczny [APK v1.1](../releases/Climagold-QC-v1.1-preview.apk) nie zawiera nowych funkcji.
 
 ## Praca z centralą
 1. Zeskanuj kartę/naklejkę, wczytaj zdjęcie albo wpisz numer. Domyślny OCR działa na telefonie, bez sieci.
@@ -65,7 +73,7 @@ Stan zakończonej serii i postęp przypisywania są zapamiętywane. Nie zamykaj 
 - `C14015-23` rozwija się do C14015…C14023; `C14568 c14578` daje dwa numery do wyboru.
 - `C14877/26` z przykładowej karty generatora daje C14877, bez roku.
 - C/K tracą prefiks w folderze: `K4567` → `DCIM/4567/`.
-- IEW/RIEW i Z zachowują prefiks. Format IEW/RIEW wymaga numeru; separator przed nim jest opcjonalny. OCR normalizuje litery i backslash do slash; slash w pojedynczej nazwie folderu zastępuje `∕`, ponieważ `/` jest separatorem katalogów.
+- IEW/RIEW, R i Z zachowują prefiks. Format IEW/RIEW/R/Z wymaga numeru, bez separatora między prefiksem a numerem w wyniku. OCR normalizuje litery i backslash do slash; slash w pojedynczej nazwie folderu zastępuje `∕`, ponieważ `/` jest separatorem katalogów.
 - Zakresy powyżej 501 numerów i nietypowe formaty wymagają ręcznej korekty.
 
 ## Jakość i galeria
@@ -74,8 +82,8 @@ Zdjęcia powstają z jakością ustawioną w aparacie telefonu. Na Androidzie 11
 Podczas fotografowania używaj podglądu fabrycznego aparatu. Po przypisaniu dostępna jest też galeria centrali: szczypanie powiększa, przesuwanie przesuwa, podwójne stuknięcie dopasowuje obraz. Kolejne zdjęcia wybiera się przyciskami. Pomniejszanie podglądu nie zmienia pliku zdjęcia.
 
 ## Zweryfikowane i wymagające testu na telefonie
-- Lokalnie zbudowano APK v1.4 i uruchomiono Android Lint bez błędów. Przeszło 43 sprawdzenia parsera, 9 sprawdzeń adresu usługi OCR, 22 sprawdzenia reguł sesji oraz 10 testów cyklu życia i przenoszenia zdjęć w Robolectric. CI wykonuje te same kontrole.
-- Podpis APK v1.4 jest zgodny z udostępnionym APK v1.3, ale nie z v1.1.
+- Lokalnie zbudowano APK v1.5 i uruchomiono Android Lint bez błędów. Przeszło 59 sprawdzeń parsera, 9 sprawdzeń adresu usługi OCR, 22 sprawdzenia reguł sesji oraz 10 testów cyklu życia i przenoszenia zdjęć w Robolectric. CI wykonuje te same kontrole.
+- Podpis APK v1.5 jest zgodny z udostępnionymi APK v1.3 i v1.4, ale nie z v1.1.
 - Nie testowano na fizycznym telefonie: uruchamiania aplikacji producenta, uprawnień MediaStore, przenoszenia zdjęć, skuteczności OCR i płynności. To wydanie testowe.
 - Android wybiera aplikację obsługującą standardowe uruchomienie aparatu; przy kilku aplikacjach może pokazać wybór. Dostępność obiektywów i funkcji zależy od telefonu i aparatu, nie od Climagold QC.
 - Wykrywane są nowe, ukończone obrazy w DCIM od rozpoczęcia sesji. System nie przekazuje identyfikatora „zdjęcie z naszej serii”. Inne zdjęcia w DCIM z datą wykonania w tym samym przedziale mogą także zostać przypisane; w czasie sesji używaj aparatu tylko do bieżącej centrali. Przy braku daty wykonania używana jest data dodania z dokładnością do sekundy. Pliki poza DCIM, filmy i część osobnych plików RAW nie są obsługiwane. Jeśli aparat jeszcze zapisuje zdjęcie, ponów wyszukiwanie.

@@ -9,14 +9,15 @@ public final class Numbers {
     if (text == null) return new ArrayList<>(out);
     Matcher m =
         Pattern.compile(
-                "(?<![A-Z0-9])((?:RIEW|IEW)[ \t]*[/:]?[ \t]*[0-9]+(?:[/.][A-Z0-9]+)*|Z[0-9]+|[CK][ "
-                    + "\t]*[0-9]+)(?![A-Z0-9])(?:[ \t]*[-–][ \t]*([0-9]+)(?![A-Z0-9]))?",
+                "(?<![A-Z0-9])((?:RIEW|IEW)[ \t]*[/:]?[ \t]*[0-9]+(?:[/.][A-Z0-9]+)*|[ZR][ "
+                    + "\t]*[/:]?[ \t]*[0-9]+|[CK][ \t]*[0-9]+)(?![A-Z0-9])(?:[ \t]*[-–][ "
+                    + "\t]*([0-9]+)(?![A-Z0-9]))?",
                 Pattern.CASE_INSENSITIVE)
             .matcher(text.toUpperCase(Locale.ROOT).replace((char) 92, (char) 47));
     while (m.find()) {
       String first = m.group(1).replaceAll("\\s", "");
       if (first.length() > 80) continue;
-      first = first.replaceFirst("^(R?IEW)[/:]?", "$1/");
+      first = normalizeSerial(first);
       String end = m.group(2);
       if (end == null) {
         out.add(first);
@@ -48,7 +49,7 @@ public final class Numbers {
     if (text == null) return new ArrayList<>(out);
     Matcher m =
         Pattern.compile(
-                "(?<![A-Z0-9])((?:R[ \t]*)?[I1L|][ \t]*E[ \t]*W|[CK])[ \t]*[/:]?[ "
+                "(?<![A-Z0-9])((?:R[ \t]*)?[I1L|][ \t]*E[ \t]*W|[CKZR])[ \t]*[/:]?[ "
                     + "\t]*([0-9OIL|SBZ]+(?:[/.][0-9OIL|SBZ]+)*(?:[ \t]*[-–][ "
                     + "\t]*[0-9OIL|SBZ]+)?)(?![A-Z0-9])")
             .matcher(text.toUpperCase(Locale.ROOT).replace('\\', '/'));
@@ -56,7 +57,7 @@ public final class Numbers {
       String digits = m.group(2);
       if (!digits.matches(".*[0-9].*") || digits.length() > 70) continue;
       String prefix = m.group(1).replaceAll("[ \t]", "");
-      if (prefix.endsWith("EW")) prefix = prefix.startsWith("R") ? "RIEW/" : "IEW/";
+      if (prefix.endsWith("EW")) prefix = prefix.startsWith("R") ? "RIEW" : "IEW";
       digits =
           digits
               .replace('O', '0')
@@ -80,14 +81,40 @@ public final class Numbers {
     while (tokens.find()) {
       String token = tokens.group();
       // Limit path component size and reject fragments of oversized identifiers.
-      if (token.length() <= 80 && token.matches(".*[0-9].*")) out.add(token);
+      if (token.length() <= 80 && token.matches(".*[0-9].*")) out.add(normalizeSerial(token));
     }
     return new ArrayList<>(out);
   }
 
+  /** Remove only the separator between a known prefix and its numeric identifier. */
+  public static String normalizeSerial(String serial) {
+    if (serial == null) return "";
+    return serial
+        .trim()
+        .toUpperCase(Locale.ROOT)
+        .replaceFirst("^(RIEW|IEW|[CKZR])[ \t]*[/\\\\∕∖:]?[ \t]*(?=[0-9])", "$1");
+  }
+
   public static String folder(String serial) {
+    return legacyFolder(normalizeSerial(serial));
+  }
+
+  private static String legacyFolder(String serial) {
     return serial.matches("[CK][0-9]+")
         ? serial.substring(1)
         : serial.replace("/", "∕").replace("\\", "∖");
+  }
+
+  /** Read old folders too; all new photos use the first, canonical path. No file migration. */
+  public static List<String> folderPaths(String serial) {
+    String normalized = normalizeSerial(serial);
+    LinkedHashSet<String> paths = new LinkedHashSet<>();
+    paths.add("DCIM/" + folder(normalized) + "/");
+    paths.add("DCIM/" + legacyFolder(serial) + "/");
+    if (normalized.matches("(?:RIEW|IEW|Z|R)[0-9].*")) {
+      paths.add("DCIM/" + legacyFolder(normalized.replaceFirst("^(RIEW|IEW|Z|R)", "$1/")) + "/");
+      paths.add("DCIM/" + normalized.replaceFirst("^(RIEW|IEW|Z|R)", "$1:") + "/");
+    }
+    return new ArrayList<>(paths);
   }
 }

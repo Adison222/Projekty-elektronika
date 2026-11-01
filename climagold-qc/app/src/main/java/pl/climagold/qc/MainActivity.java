@@ -60,7 +60,7 @@ public class MainActivity extends ComponentActivity {
             });
     getWindow().setStatusBarColor(Color.rgb(17, 25, 32));
     getWindow().setNavigationBarColor(Color.rgb(17, 25, 32));
-    serial = getPreferences(0).getString("lastSerial", "");
+    serial = Numbers.normalizeSerial(getPreferences(0).getString("lastSerial", ""));
     android.view.Display display = getWindowManager().getDefaultDisplay();
     for (android.view.Display.Mode mode : display.getSupportedModes()) {
       if (mode.getPhysicalWidth() == display.getMode().getPhysicalWidth()
@@ -74,7 +74,7 @@ public class MainActivity extends ComponentActivity {
       }
     }
     if (b != null) {
-      serial = b.getString("serial", "");
+      serial = Numbers.normalizeSerial(b.getString("serial", ""));
       count = b.getInt("count");
     }
     getOnBackPressedDispatcher()
@@ -303,9 +303,9 @@ public class MainActivity extends ComponentActivity {
         });
     root.addView(mode);
     hint(
-        "C — centrala, K — kompakt, IEW — inne zamówienie, RIEW — elementy automatyki. Prefiks i"
-            + " numer obok tworzą oznaczenie. Czytelne ręczne znaki też możesz spróbować odczytać"
-            + " offline.");
+        "C — centrala, K — kompakt, IEW — inne zamówienie, RIEW — elementy automatyki; także R i Z."
+            + " Prefiks i numer obok tworzą oznaczenie. Czytelne ręczne znaki też możesz spróbować"
+            + " odczytać offline.");
     action(
         "Dalej · sprawdź numer",
         () -> {
@@ -344,17 +344,21 @@ public class MainActivity extends ComponentActivity {
         .show();
   }
 
-  void confirm(String value) {
+  void confirm(String rawValue) {
+    String value = Numbers.normalizeSerial(rawValue);
     if (!nativeSession.readBeforeConfirm(value)) return;
     String path = "DCIM/" + Numbers.folder(value) + "/";
+    List<String> paths = Numbers.folderPaths(value);
     boolean exists = false;
     try (android.database.Cursor c =
         getContentResolver()
             .query(
                 MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
                 new String[] {"_id"},
-                "relative_path=?",
-                new String[] {path},
+                "relative_path IN ("
+                    + String.join(",", Collections.nCopies(paths.size(), "?"))
+                    + ")",
+                paths.toArray(new String[0]),
                 null)) {
       exists = c != null && c.moveToFirst();
     } catch (Exception e) {
@@ -365,7 +369,8 @@ public class MainActivity extends ComponentActivity {
         .setTitle(value)
         .setMessage(
             (exists
-                    ? "Ten numer ma już zdjęcia. Dopiszę kolejne do tego samego folderu.\n"
+                    ? "Ten numer ma już zdjęcia. Nowe zapiszę w folderze poniżej. Galeria obejmuje"
+                          + " też wcześniejsze foldery tego oznaczenia.\n"
                     : "Nowa seria zdjęć.\n")
                 + path)
         .setPositiveButton(
@@ -536,12 +541,13 @@ public class MainActivity extends ComponentActivity {
     review.setPadding(dp(20), 0, dp(20), dp(12));
     review.addView(correction);
     TextView types = new TextView(this);
-    types.setText("C — centrala · K — kompakt\nIEW — inne zamówienie\nRIEW — elementy automatyki");
+    types.setText(
+        "C — centrala · K — kompakt\nIEW — inne zamówienie\nRIEW — elementy automatyki · R · Z");
     types.setTextColor(MUTED);
     types.setPadding(0, dp(8), 0, dp(8));
     review.addView(types);
     Button suggestions = new Button(this);
-    suggestions.setText("Podpowiedz oznaczenie C / K / IEW / RIEW");
+    suggestions.setText("Podpowiedz oznaczenie C / K / IEW / RIEW / R / Z");
     suggestions.setAllCaps(false);
     suggestions.setOnClickListener(
         v -> {
@@ -777,13 +783,16 @@ public class MainActivity extends ComponentActivity {
     if (provider != null) provider.unbindAll();
     capture = null;
     ArrayList<Uri> photos = new ArrayList<>();
+    List<String> paths = Numbers.folderPaths(serial);
     try (android.database.Cursor c =
         getContentResolver()
             .query(
                 MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
                 new String[] {"_id"},
-                "relative_path=?",
-                new String[] {"DCIM/" + Numbers.folder(serial) + "/"},
+                "relative_path IN ("
+                    + String.join(",", Collections.nCopies(paths.size(), "?"))
+                    + ")",
+                paths.toArray(new String[0]),
                 "date_added DESC")) {
       if (c != null)
         while (c.moveToNext())

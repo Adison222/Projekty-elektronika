@@ -24,5 +24,5 @@ jobs:
           java -cp "/tmp/qc-tests:$ANDROID_HOME/platforms/android-35/android.jar" pl.climagold.qc.HandwritingEndpointTest
       - uses: actions/upload-artifact@v4
         with:
-          name: Climagold-QC-v1.4-preview-apk
+          name: Climagold-QC-v1.5-preview-apk
           path: climagold-qc/app/build/outputs/apk/debug/*.apk

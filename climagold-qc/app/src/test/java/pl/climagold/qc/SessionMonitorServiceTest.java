@@ -122,8 +122,8 @@ public class SessionMonitorServiceTest {
         org.robolectric.shadows.ShadowAlertDialog.getLatestAlertDialog();
     confirmation.getButton(android.content.DialogInterface.BUTTON_POSITIVE).performClick();
     Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();
-    assertEquals("RIEW/123", activity.serial);
-    assertEquals("RIEW/123", activity.draft);
+    assertEquals("RIEW123", activity.serial);
+    assertEquals("RIEW123", activity.draft);
     // No new capture window exists until read access and the baseline snapshot are available.
     assertFalse(prefs.contains("serial"));
     controller.pause().stop().destroy();

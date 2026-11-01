@@ -23,6 +23,13 @@ final class NativeSession {
     this.activity = activity;
     prefs = activity.getSharedPreferences(SessionMonitorService.PREFS, 0);
     history = activity.getSharedPreferences("completed_photo_session", 0);
+    for (SharedPreferences saved : new SharedPreferences[] {prefs, history}) {
+      if (saved.contains("serial"))
+        saved
+            .edit()
+            .putString("serial", Numbers.normalizeSerial(saved.getString("serial", "")))
+            .apply();
+    }
   }
 
   boolean active() {
@@ -301,7 +308,7 @@ final class NativeSession {
 
   private Scan scan() throws IOException {
     Scan found = new Scan();
-    String target = "DCIM/" + Numbers.folder(prefs.getString("serial", "")) + "/";
+    List<String> targets = Numbers.folderPaths(prefs.getString("serial", ""));
     Set<String> done = prefs.getStringSet("copied", Collections.emptySet());
     try (Cursor c =
         activity
@@ -318,7 +325,7 @@ final class NativeSession {
         String path = c.getString(1);
         if (path == null
             || !path.startsWith("DCIM/")
-            || path.equals(target)
+            || targets.contains(path)
             || done.contains(Long.toString(id))) continue;
         if (!SessionWindow.includes(
             prefs.getLong("after_id", 0),

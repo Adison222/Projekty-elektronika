@@ -1,3 +1,11 @@
+# 1.5 preview
+
+- Prefiks R, np. R14577, w parserze, OCR, zakresach i nazwach folderów.
+- Oznaczenia IEW/RIEW/Z/R bez separatora przed cyframi, np. IEW123 i RIEW123.
+- Normalizacja oznaczeń zapamiętanych sesji z zachowaniem ich stanu.
+- Galeria odczytuje także starsze foldery z separatorem; nowe zdjęcia zapisuje w poprawnym folderze bez separatora po prefiksie.
+- 59 sprawdzeń parsera i testy wznowienia starszego oznaczenia; APK zgodny podpisem z v1.3/v1.4.
+
 # 1.4 preview
 
 - Automatyczne zakończenie przedziału serii po powrocie z aparatu i po wyłączeniu ekranu.
