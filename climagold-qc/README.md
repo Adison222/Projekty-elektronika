@@ -36,7 +36,11 @@ Domyślny ML Kit działa offline i najlepiej rozpoznaje druk. Nie zapewnia nieza
 Zapamiętywany jest tylko adres usługi. Klucz jest używany w pamięci do jednej operacji, bez zapisu na dysku, w logach i repozytorium. W tej wersji chmurowy odczyt jest dostępny dla importowanego zdjęcia; skaner na żywo korzysta z OCR offline. Nie skonfigurowano konta Azure i nie wykonano odczytu na rzeczywistej usłudze podczas prac nad tą wersją.
 
 ## Instalacja
-Nowy APK v1.3 jest budowany przez [GitHub Actions](https://github.com/Adison222/Projekty-elektronika/actions) jako artefakt `Climagold-QC-v1.3-preview-apk`. Pobierz artefakt z udanego uruchomienia dla odpowiedniego commita i rozpakuj APK. Wersja ma ten sam identyfikator aplikacji, ale podpis debug z CI może różnić się od wcześniejszej instalacji. Nie odinstalowuj używanej aplikacji bez zabezpieczenia danych sesji. Historyczny [APK v1.1](../releases/Climagold-QC-v1.1-preview.apk) nie zawiera nowych funkcji.
+[**Pobierz Climagold-QC-v1.3-preview.apk**](../releases/Climagold-QC-v1.3-preview.apk?raw=true) — gotowy plik dla Androida 10+ z kodu commita `378bd11`. Suma kontrolna znajduje się w `releases/SHA256SUMS`.
+
+Zweryfikowano podpis APK. **Podpis v1.3 różni się od historycznego APK v1.1**, więc Android nie pozwoli zainstalować go jako aktualizacji tamtej wersji. Nie odinstalowuj używanej aplikacji z otwartą sesją; wcześniej zakończ serię i zabezpiecz zdjęcia. Zachowanie podpisu starej instalacji wymaga oryginalnego klucza podpisującego, którego nie ma w bieżącym środowisku.
+
+GitHub Actions nadal buduje artefakt `Climagold-QC-v1.3-preview-apk`. Historyczny [APK v1.1](../releases/Climagold-QC-v1.1-preview.apk) nie zawiera nowych funkcji.
 
 ## Praca z centralą
 1. Zeskanuj kartę/naklejkę, wczytaj zdjęcie albo wpisz numer. Domyślny OCR działa na telefonie, bez sieci.
