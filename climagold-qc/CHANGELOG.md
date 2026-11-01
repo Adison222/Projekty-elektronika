@@ -1,3 +1,14 @@
+# 1.4 preview
+
+- Automatyczne zakończenie przedziału serii po powrocie z aparatu i po wyłączeniu ekranu.
+- Usługa pierwszoplanowa monitorująca blokadę podczas działania fabrycznego aparatu.
+- Automatyczne przygotowanie i przypisanie serii po powrocie do aplikacji; wymagana systemowa zgoda Androida 11+ pozostaje. Android 10 kopiuje zdjęcia, zachowując oryginały.
+- Trwały stan końca serii, ponawianie po odmowie zgody, częściowym błędzie i opóźnionym zapisie zdjęć.
+- Ostatnia zakończona sesja z datą, numerem i przyciskiem dołączenia kolejnych zdjęć po potwierdzeniu.
+- Nowy przedział przy wznowieniu nie obejmuje zdjęć z przerwy między sesjami.
+- Testy granic sesji i symulowane testy cyklu życia Androida. Wymagane testy aparatu, blokady i MediaStore na telefonie.
+- APK v1.4 podpisany tym samym kluczem co udostępniony APK v1.3.
+
 # 1.3 preview
 
 - Prefiksy C (centrala), K (kompakt), IEW (inne zamówienie), RIEW (inne zamówienie elementów automatyki) z numerem obok, ze spacją lub bez.

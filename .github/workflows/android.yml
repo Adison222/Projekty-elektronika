@@ -13,14 +13,16 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
-      - run: gradle -p climagold-qc assembleDebug lintDebug
+      - run: gradle -p climagold-qc assembleDebug lintDebug testDebugUnitTest
       - run: |
           mkdir -p /tmp/qc-tests
           javac -d /tmp/qc-tests climagold-qc/app/src/main/java/pl/climagold/qc/Numbers.java climagold-qc/tests/NumbersTest.java
           java -cp /tmp/qc-tests NumbersTest
+          javac -d /tmp/qc-tests climagold-qc/app/src/main/java/pl/climagold/qc/SessionWindow.java climagold-qc/tests/SessionWindowTest.java
+          java -cp /tmp/qc-tests SessionWindowTest
           javac -cp "$ANDROID_HOME/platforms/android-35/android.jar" -d /tmp/qc-tests climagold-qc/app/src/main/java/pl/climagold/qc/HandwritingOcr.java climagold-qc/tests/HandwritingEndpointTest.java
           java -cp "/tmp/qc-tests:$ANDROID_HOME/platforms/android-35/android.jar" pl.climagold.qc.HandwritingEndpointTest
       - uses: actions/upload-artifact@v4
         with:
-          name: Climagold-QC-v1.3-preview-apk
+          name: Climagold-QC-v1.4-preview-apk
           path: climagold-qc/app/build/outputs/apk/debug/*.apk

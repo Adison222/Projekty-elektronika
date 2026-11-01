@@ -9,20 +9,20 @@ import android.database.Cursor;
 import android.net.Uri;
 import android.os.Build;
 import android.provider.MediaStore;
-import android.widget.*;
 import java.io.*;
 import java.util.*;
 
-/** The OEM camera owns capture; this controller only assigns a confirmed batch afterwards. */
+/** Durable capture window, followed by automatic assignment with Android's required consent. */
 final class NativeSession {
-  private static final int READ_REQUEST = 40, WRITE_REQUEST = 41;
+  private static final int READ_REQUEST = 40, WRITE_REQUEST = 41, NOTIFY_REQUEST = 42;
   private final MainActivity activity;
-  private final SharedPreferences prefs;
-  private boolean working;
+  private final SharedPreferences prefs, history;
+  private boolean working, visible, permissionVisible;
 
   NativeSession(MainActivity activity) {
     this.activity = activity;
-    prefs = activity.getSharedPreferences("native_camera_session", 0);
+    prefs = activity.getSharedPreferences(SessionMonitorService.PREFS, 0);
+    history = activity.getSharedPreferences("completed_photo_session", 0);
   }
 
   boolean active() {
@@ -31,6 +31,10 @@ final class NativeSession {
 
   boolean busy() {
     return working;
+  }
+
+  private boolean ended() {
+    return prefs.getLong("ended_ms", 0) > 0;
   }
 
   private String permission() {
@@ -43,14 +47,55 @@ final class NativeSession {
     return activity.checkSelfPermission(permission()) == PackageManager.PERMISSION_GRANTED;
   }
 
+  void resumed() {
+    visible = true;
+    if (!active() || working || permissionVisible) return;
+    boolean locked = SessionMonitorService.locked(activity);
+    if (locked) {
+      SessionMonitorService.close(activity, "Zablokowano lub wygaszono ekran");
+      return;
+    }
+    if (SessionWindow.shouldFinish(
+        active(),
+        prefs.getBoolean("camera_away", false),
+        prefs.getLong("ended_ms", 0),
+        prefs.getBoolean("finish_attempted", false),
+        working,
+        visible,
+        locked)) {
+      finish("Powrót z aparatu do aplikacji");
+    } else {
+      if (!ended()) {
+        try {
+          androidx.core.content.ContextCompat.startForegroundService(
+              activity, new Intent(activity, SessionMonitorService.class));
+        } catch (Exception e) {
+          activity.message("Nie uruchomiono monitorowania blokady: " + e.getMessage());
+        }
+      }
+      panel();
+    }
+  }
+
+  void unlocked() {
+    if (visible) resumed();
+  }
+
+  void paused() {
+    visible = false;
+    if (active() && SessionMonitorService.locked(activity))
+      SessionMonitorService.close(activity, "Zablokowano lub wygaszono ekran");
+  }
+
   boolean readBeforeConfirm(String serial) {
     if (canRead()) return true;
     prefs.edit().putString("confirm_number", serial).apply();
     new AlertDialog.Builder(activity)
         .setTitle("Dostęp do zdjęć")
         .setMessage(
-            "Potrzebny jest dostęp do wszystkich zdjęć, aby wykrywać wcześniejsze foldery i nowe"
-                + " zdjęcia z aparatu telefonu. Zdjęcia pozostają na telefonie.")
+            "Zezwól na wszystkie zdjęcia, aby wykrywać serię z aparatu telefonu. Powrót z aparatu"
+                + " lub blokada ekranu zakończy serię; następnie Android może poprosić o zgodę na"
+                + " przeniesienie.")
         .setPositiveButton(
             "Kontynuuj",
             (d, w) -> activity.requestPermissions(new String[] {permission()}, READ_REQUEST))
@@ -65,16 +110,17 @@ final class NativeSession {
       return;
     }
     if (!canRead()) {
-      new AlertDialog.Builder(activity)
-          .setTitle("Zdjęcia z fabrycznego aparatu")
-          .setMessage(
-              "Aby znaleźć całą serię wykonaną w osobnej aplikacji aparatu, zezwól na dostęp do"
-                  + " wszystkich zdjęć. Po powrocie zatwierdzisz zdjęcia do przypisania centrali.")
-          .setPositiveButton(
-              "Zezwól",
-              (d, w) -> activity.requestPermissions(new String[] {permission()}, READ_REQUEST))
-          .setNegativeButton("Anuluj", null)
-          .show();
+      readBeforeConfirm(activity.serial);
+      return;
+    }
+    if (working) return;
+    if (Build.VERSION.SDK_INT >= 33
+        && activity.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
+            != PackageManager.PERMISSION_GRANTED
+        && !activity.getPreferences(0).getBoolean("askedSessionNotifications", false)) {
+      activity.getPreferences(0).edit().putBoolean("askedSessionNotifications", true).apply();
+      activity.requestPermissions(
+          new String[] {Manifest.permission.POST_NOTIFICATIONS}, NOTIFY_REQUEST);
       return;
     }
     working = true;
@@ -91,10 +137,12 @@ final class NativeSession {
                             null,
                             null,
                             "_id DESC")) {
-                  if (c != null && c.moveToFirst()) high = c.getLong(0);
+                  if (c == null) throw new IOException("Brak dostępu do listy zdjęć");
+                  if (c.moveToFirst()) high = c.getLong(0);
                 }
                 if (!prefs
                     .edit()
+                    .clear()
                     .putString("serial", activity.serial)
                     .putLong("after_id", high)
                     .putLong("started", System.currentTimeMillis() / 1000)
@@ -102,6 +150,13 @@ final class NativeSession {
                 activity.runOnUiThread(
                     () -> {
                       working = false;
+                      if (activity.isDestroyed()
+                          || !visible
+                          || SessionMonitorService.locked(activity)) {
+                        SessionMonitorService.close(
+                            activity, "Aplikacja została opuszczona przed otwarciem aparatu");
+                        return;
+                      }
                       launch();
                     });
               } catch (Exception e) {
@@ -111,189 +166,322 @@ final class NativeSession {
                       activity.message("Nie można rozpocząć serii: " + e.getMessage());
                     });
               }
-            })
+            },
+            "session-start")
         .start();
   }
 
   void permissionResult(int request) {
+    if (request == NOTIFY_REQUEST) {
+      start();
+      return;
+    }
     if (request != READ_REQUEST) return;
-    if (canRead()) {
-      String number = prefs.getString("confirm_number", null);
-      prefs.edit().remove("confirm_number").apply();
-      if (active()) panel();
-      else if (number != null) activity.confirm(number);
-      else start();
-    } else
+    if (!canRead()) {
       activity.message(
-          "Potrzebny jest dostęp do wszystkich zdjęć. Dostęp tylko do wybranych nie pozwala wykryć"
-              + " nowej serii.");
+          "Do automatycznego wykrywania serii potrzebny jest dostęp do wszystkich zdjęć.");
+      return;
+    }
+    String number = prefs.getString("confirm_number", null);
+    prefs.edit().remove("confirm_number").apply();
+    if (active() && ended()) finish("Zakończenie serii");
+    else if (active()) panel();
+    else if (number != null) activity.confirm(number);
   }
 
   void launch() {
+    if (!active() || ended() || working) {
+      panel();
+      return;
+    }
     if (activity.provider != null) activity.provider.unbindAll();
     activity.capture = null;
     try {
+      // Start while this activity is visible, before handing control to the OEM camera.
+      androidx.core.content.ContextCompat.startForegroundService(
+          activity, new Intent(activity, SessionMonitorService.class));
+      if (!prefs.edit().putBoolean("camera_away", true).commit())
+        throw new IOException("Nie zapisano wyjścia do aparatu");
       activity.startActivity(new Intent(MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA));
-    } catch (ActivityNotFoundException e) {
-      activity.message("Brak aplikacji aparatu obsługującej ten tryb.");
+    } catch (Exception e) {
+      prefs.edit().putBoolean("camera_away", false).apply();
+      activity.stopService(new Intent(activity, SessionMonitorService.class));
+      activity.message("Nie otwarto aparatu: " + e.getMessage());
       panel();
     }
   }
 
+  void finish(String reason) {
+    if (!active() || working || permissionVisible) return;
+    if (!SessionMonitorService.close(activity, reason)) {
+      activity.message("Nie zapisano końca serii. Spróbuj ponownie.");
+      return;
+    }
+    activity.stopService(new Intent(activity, SessionMonitorService.class));
+    if (!visible || SessionMonitorService.locked(activity)) return;
+    if (!canRead()) {
+      prefs.edit().putBoolean("finish_attempted", true).apply();
+      activity.requestPermissions(new String[] {permission()}, READ_REQUEST);
+      return;
+    }
+    prefs.edit().putBoolean("finish_attempted", true).apply();
+    collect();
+  }
+
   void panel() {
-    if (!active() || working) return;
+    if (activity.isDestroyed() || !active() || working || permissionVisible) return;
     if (activity.provider != null) activity.provider.unbindAll();
     activity.capture = null;
     activity.serial = prefs.getString("serial", "");
     activity.layout();
-    activity.hint("02 — ZDJĘCIA  /  03 — PRZYPISANIE");
-    activity.label("Seria · " + activity.serial);
-    activity.hint(
-        "Po zdjęciach wróć tutaj przyciskiem Wstecz lub przełącznikiem aplikacji. Aparat zachowuje"
-            + " własny wygląd i funkcje.");
-    activity.button("Otwórz ponownie aparat", this::launch);
-    activity.action("Wybierz i przypisz zdjęcia", this::review, true);
+    activity.label((ended() ? "Seria zakończona · " : "Seria · ") + activity.serial);
+    if (ended()) {
+      activity.hint(
+          prefs.getString("end_reason", "Zakończenie serii")
+              + ". Zdjęcia oczekują na przypisanie do DCIM/"
+              + Numbers.folder(activity.serial)
+              + "/.");
+      activity.action("Dokończ przypisywanie zdjęć", () -> finish("Ponowienie przypisania"), true);
+    } else {
+      activity.hint(
+          "Powrót z aparatu lub blokada ekranu kończy serię. Po odblokowaniu zaakceptuj systemową"
+              + " zgodę na przeniesienie, jeśli się pojawi.");
+      activity.button("Otwórz aparat", this::launch);
+      activity.action("Zakończ i przypisz zdjęcia", () -> finish("Zakończono przyciskiem"), true);
+    }
     activity.button("Galeria centrali", () -> activity.gallery(0));
     activity.button(
         "Zakończ bez przypisywania",
         () ->
             new AlertDialog.Builder(activity)
-                .setTitle("Zakończyć serię?")
-                .setMessage(
-                    "Zdjęcia pozostaną tam, gdzie zapisał je aparat. Nic nie zostanie usunięte.")
-                .setPositiveButton(
-                    "Zakończ",
-                    (d, w) -> {
-                      prefs.edit().clear().apply();
-                      activity.home();
-                    })
+                .setTitle("Pozostawić zdjęcia w aparacie?")
+                .setMessage("Pozostałe zdjęcia nie zostaną przeniesione ani usunięte.")
+                .setPositiveButton("Zakończ", (d, w) -> complete())
                 .setNegativeButton("Wróć", null)
                 .show());
     activity.scrollable();
   }
 
-  private static final class Photo {
-    final Uri uri;
-    final String name;
-
-    Photo(long id, String name) {
-      uri = ContentUris.withAppendedId(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, id);
-      this.name = name;
-    }
+  void lastSessionCard() {
+    String number = history.getString("serial", "");
+    if (number.isEmpty()) return;
+    activity.label("Ostatnia zakończona seria · " + number);
+    String when =
+        android.text.format.DateFormat.format("dd.MM.yyyy HH:mm", history.getLong("finished", 0))
+            .toString();
+    activity.hint(
+        "Zakończona " + when + ". Możesz dołączyć kolejne zdjęcia do tego samego folderu.");
+    activity.action(
+        "Dołącz do ostatniej sesji",
+        () ->
+            new AlertDialog.Builder(activity)
+                .setTitle("Wznowić sesję " + number + "?")
+                .setMessage(
+                    "Nowe zdjęcia trafią do DCIM/"
+                        + Numbers.folder(number)
+                        + "/. Dotychczasowe pozostaną bez zmian. Zdjęcia zrobione pomiędzy sesjami"
+                        + " nie zostaną dołączone.")
+                .setPositiveButton(
+                    "Dołącz i otwórz aparat",
+                    (d, w) -> {
+                      activity.serial = number;
+                      activity.draft = number;
+                      activity.getPreferences(0).edit().putString("lastSerial", number).apply();
+                      start();
+                    })
+                .setNegativeButton("Anuluj", null)
+                .show(),
+        true);
   }
 
-  void review() {
-    if (working) return;
-    if (!canRead()) {
-      activity.requestPermissions(new String[] {permission()}, READ_REQUEST);
-      return;
+  private static final class Scan {
+    final LinkedHashSet<String> uris = new LinkedHashSet<>();
+    boolean pending;
+  }
+
+  private Scan scan() throws IOException {
+    Scan found = new Scan();
+    String target = "DCIM/" + Numbers.folder(prefs.getString("serial", "")) + "/";
+    Set<String> done = prefs.getStringSet("copied", Collections.emptySet());
+    try (Cursor c =
+        activity
+            .getContentResolver()
+            .query(
+                MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                new String[] {"_id", "relative_path", "date_taken", "date_added", "is_pending"},
+                "_id > ?" + (Build.VERSION.SDK_INT >= 30 ? " AND is_trashed = 0" : ""),
+                new String[] {Long.toString(prefs.getLong("after_id", 0))},
+                "_id ASC")) {
+      if (c == null) throw new IOException("Nie odczytano listy zdjęć");
+      while (c.moveToNext()) {
+        long id = c.getLong(0);
+        String path = c.getString(1);
+        if (path == null
+            || !path.startsWith("DCIM/")
+            || path.equals(target)
+            || done.contains(Long.toString(id))) continue;
+        if (!SessionWindow.includes(
+            prefs.getLong("after_id", 0),
+            id,
+            prefs.getLong("started", 0),
+            prefs.getLong("ended_ms", 0),
+            c.getLong(2),
+            c.getLong(3))) continue;
+        if (c.getInt(4) != 0) {
+          found.pending = true;
+          continue;
+        }
+        found.uris.add(
+            ContentUris.withAppendedId(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, id)
+                .toString());
+      }
     }
+    return found;
+  }
+
+  private void collect() {
     working = true;
+    activity.layout();
+    activity.label("Kończenie serii…");
+    activity.hint(
+        "Czekam na zapis ostatnich zdjęć przez aparat. Następnie przypiszę serię do folderu.");
     new Thread(
             () -> {
-              ArrayList<Photo> found = new ArrayList<>();
               try {
-                String target = "DCIM/" + Numbers.folder(prefs.getString("serial", "")) + "/";
-                Set<String> done = prefs.getStringSet("copied", Collections.emptySet());
-                try (Cursor c =
-                    activity
-                        .getContentResolver()
-                        .query(
-                            MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
-                            new String[] {"_id", "_display_name", "relative_path"},
-                            "_id > ? AND date_added >= ? AND is_pending = 0"
-                                + (Build.VERSION.SDK_INT >= 30 ? " AND is_trashed = 0" : ""),
-                            new String[] {
-                              Long.toString(prefs.getLong("after_id", 0)),
-                              Long.toString(prefs.getLong("started", 0))
-                            },
-                            "_id ASC")) {
-                  if (c != null)
-                    while (c.moveToNext()) {
-                      String path = c.getString(2);
-                      long id = c.getLong(0);
-                      if (path != null
-                          && path.startsWith("DCIM/")
-                          && !path.equals(target)
-                          && !done.contains(Long.toString(id)))
-                        found.add(new Photo(id, c.getString(1)));
-                    }
+                // Give the camera time to publish its last image, including delayed MediaStore
+                // writes.
+                long wait =
+                    Math.max(0, 5000 - (System.currentTimeMillis() - prefs.getLong("ended_ms", 0)));
+                if (wait > 0) Thread.sleep(Math.min(wait, 5000));
+                Scan found = scan();
+                for (int attempt = 0; found.pending && attempt < 5; attempt++) {
+                  Thread.sleep(2000);
+                  found = scan();
                 }
+                if (found.pending)
+                  throw new IOException(
+                      "Aparat nadal zapisuje zdjęcia. Ponów przypisanie za chwilę.");
+                if (!prefs.edit().putStringSet("pending", found.uris).commit())
+                  throw new IOException("Nie zapisano listy zdjęć");
+                Scan ready = found;
                 activity.runOnUiThread(
                     () -> {
                       working = false;
-                      showSelection(found);
+                      if (activity.isDestroyed()
+                          || !visible
+                          || SessionMonitorService.locked(activity)) {
+                        prefs.edit().putBoolean("finish_attempted", false).apply();
+                        return;
+                      }
+                      if (ready.uris.isEmpty()) {
+                        // Keep the closed capture window for retry: an OEM may publish photos much
+                        // later.
+                        panel();
+                        new AlertDialog.Builder(activity)
+                            .setTitle("Seria zakończona — brak nowych zdjęć")
+                            .setMessage(
+                                "Jeśli aparat jeszcze zapisuje pliki, ponów wyszukiwanie. Możesz"
+                                    + " też zamknąć pustą serię.")
+                            .setPositiveButton(
+                                "Szukaj ponownie", (d, w) -> finish("Ponowne wyszukiwanie"))
+                            .setNeutralButton("Zamknij pustą serię", (d, w) -> complete())
+                            .setNegativeButton("Później", null)
+                            .show();
+                      } else requestWrite();
                     });
               } catch (Exception e) {
                 activity.runOnUiThread(
                     () -> {
                       working = false;
-                      activity.message("Nie odczytano zdjęć: " + e.getMessage());
+                      panel();
+                      activity.message("Nie przypisano serii: " + e.getMessage());
                     });
               }
-            })
+            },
+            "session-collect")
         .start();
   }
 
-  private void showSelection(ArrayList<Photo> photos) {
-    if (photos.isEmpty()) {
-      activity.message(
-          "Nie znaleziono nowych zdjęć w DCIM. Poczekaj, aż aparat skończy zapis, i spróbuj"
-              + " ponownie.");
+  private void requestWrite() {
+    if (Build.VERSION.SDK_INT < 30) {
+      transfer();
       return;
     }
-    boolean[] selected = new boolean[photos.size()];
-    Arrays.fill(selected, true);
-    String[] names = new String[photos.size()];
-    for (int i = 0; i < names.length; i++) names[i] = photos.get(i).name;
-    new AlertDialog.Builder(activity)
-        .setTitle("Zdjęcia dla " + prefs.getString("serial", "") + " • " + photos.size())
-        .setMultiChoiceItems(names, selected, (d, i, checked) -> selected[i] = checked)
-        .setNeutralButton("Wróć", null)
-        .setPositiveButton(
-            Build.VERSION.SDK_INT >= 30 ? "Przenieś serię" : "Kopiuj serię",
-            (d, w) -> {
-              HashSet<String> uris = new HashSet<>();
-              for (int i = 0; i < selected.length; i++)
-                if (selected[i]) uris.add(photos.get(i).uri.toString());
-              if (uris.isEmpty()) return;
-              prefs.edit().putStringSet("pending", uris).commit();
-              if (Build.VERSION.SDK_INT >= 30) {
-                try {
-                  ArrayList<Uri> list = new ArrayList<>();
-                  for (String u : uris) list.add(Uri.parse(u));
-                  activity.startIntentSenderForResult(
-                      MediaStore.createWriteRequest(activity.getContentResolver(), list)
-                          .getIntentSender(),
-                      WRITE_REQUEST,
-                      null,
-                      0,
-                      0,
-                      0);
-                } catch (Exception e) {
-                  activity.message("Nie uzyskano zgody na przeniesienie: " + e.getMessage());
-                }
-              } else transfer();
-            })
-        .show();
+    try {
+      ArrayList<Uri> list = new ArrayList<>();
+      // Android limits each consent request to 2000 URIs. Continue with the next batch afterwards.
+      for (String u : prefs.getStringSet("pending", Collections.emptySet())) {
+        if (list.size() == 2000) break;
+        list.add(Uri.parse(u));
+      }
+      if (list.isEmpty()) {
+        complete();
+        return;
+      }
+      HashSet<String> batch = new HashSet<>();
+      for (Uri uri : list) batch.add(uri.toString());
+      if (!prefs.edit().putStringSet("write_batch", batch).commit())
+        throw new IOException("Nie zapisano partii zdjęć");
+      permissionVisible = true;
+      activity.startIntentSenderForResult(
+          MediaStore.createWriteRequest(activity.getContentResolver(), list).getIntentSender(),
+          WRITE_REQUEST,
+          null,
+          0,
+          0,
+          0);
+    } catch (Exception e) {
+      permissionVisible = false;
+      panel();
+      activity.message("Nie uzyskano zgody na przeniesienie: " + e.getMessage());
+    }
   }
 
   void result(int request, int result) {
     if (request != WRITE_REQUEST) return;
+    permissionVisible = false;
+    if (!active()) return;
     if (result == Activity.RESULT_OK) transfer();
-    else activity.message("Nie przeniesiono zdjęć. Seria jest nadal otwarta.");
+    else {
+      panel();
+      activity.message(
+          "Seria jest zakończona. Zdjęcia czekają na zgodę — wybierz Dokończ przypisywanie zdjęć.");
+    }
+  }
+
+  private void complete() {
+    if (!active()) return;
+    String number = prefs.getString("serial", "");
+    if (!history
+        .edit()
+        .putString("serial", number)
+        .putLong("finished", prefs.getLong("ended_ms", System.currentTimeMillis()))
+        .putInt("count", prefs.getInt("saved_count", 0))
+        .commit()) {
+      activity.message("Nie zapisano historii sesji");
+      return;
+    }
+    if (!prefs.edit().clear().commit()) {
+      activity.message("Nie zapisano zakończenia sesji");
+      return;
+    }
+    activity.stopService(new Intent(activity, SessionMonitorService.class));
+    if (!activity.isDestroyed()) activity.home();
   }
 
   private void transfer() {
     if (working) return;
     working = true;
     activity.layout();
-    activity.label("Przypisywanie zdjęć… Nie zamykaj aplikacji.");
+    activity.label("Przypisywanie zdjęć…");
+    activity.hint("Nie zamykaj aplikacji podczas zapisu.");
     final String target = "DCIM/" + Numbers.folder(prefs.getString("serial", "")) + "/";
-    final Set<String> uris = new HashSet<>(prefs.getStringSet("pending", Collections.emptySet()));
+    final Set<String> uris =
+        new HashSet<>(
+            prefs.getStringSet(
+                Build.VERSION.SDK_INT >= 30 ? "write_batch" : "pending", Collections.emptySet()));
     new Thread(
             () -> {
-              int success = 0;
               ArrayList<String> errors = new ArrayList<>();
               for (String value : uris) {
                 Uri uri = Uri.parse(value);
@@ -304,32 +492,37 @@ final class NativeSession {
                     if (activity.getContentResolver().update(uri, update, null, null) != 1)
                       throw new IOException("Nie zmieniono folderu");
                   } else copy(uri, target);
-                  success++;
+                  HashSet<String> pending =
+                      new HashSet<>(prefs.getStringSet("pending", Collections.emptySet()));
+                  pending.remove(value);
+                  if (!prefs
+                      .edit()
+                      .putStringSet("pending", pending)
+                      .putInt("saved_count", prefs.getInt("saved_count", 0) + 1)
+                      .commit()) throw new IOException("Nie zapisano postępu");
                 } catch (Exception e) {
                   errors.add(e.getMessage() == null ? "Błąd dostępu" : e.getMessage());
                 }
               }
-              final int saved = success;
-              if (errors.isEmpty()) prefs.edit().clear().commit();
               activity.runOnUiThread(
                   () -> {
                     working = false;
-                    if (errors.isEmpty()) {
-                      activity.home();
-                      activity.message("Zapisano " + saved + " zdjęć w " + target);
-                    } else {
+                    if (!errors.isEmpty()) {
                       panel();
-                      new AlertDialog.Builder(activity)
-                          .setTitle("Przypisano " + saved + " z " + uris.size())
-                          .setMessage(
-                              "Pozostałe zdjęcia są w oryginalnym folderze. Możesz ponowić wybór"
-                                  + " serii.\n"
-                                  + errors.get(0))
-                          .setPositiveButton("OK", null)
-                          .show();
+                      activity.message(
+                          "Nie przypisano części zdjęć. Możesz ponowić: " + errors.get(0));
+                    } else if (!prefs.getStringSet("pending", Collections.emptySet()).isEmpty()) {
+                      if (visible && !SessionMonitorService.locked(activity)) requestWrite();
+                      else prefs.edit().putBoolean("finish_attempted", false).apply();
+                    } else {
+                      int saved = prefs.getInt("saved_count", 0);
+                      complete();
+                      activity.message(
+                          "Seria zakończona. Przypisano " + saved + " zdjęć do " + target);
                     }
                   });
-            })
+            },
+            "session-transfer")
         .start();
   }
 

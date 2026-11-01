@@ -34,10 +34,23 @@ public class MainActivity extends ComponentActivity {
   androidx.activity.result.ActivityResultLauncher<String> photoPicker;
 
   androidx.camera.core.Camera camera;
+  BroadcastReceiver unlockReceiver;
 
   public void onCreate(Bundle b) {
     super.onCreate(b);
     nativeSession = new NativeSession(this);
+    unlockReceiver =
+        new BroadcastReceiver() {
+          @Override
+          public void onReceive(Context context, Intent intent) {
+            nativeSession.unlocked();
+          }
+        };
+    ContextCompat.registerReceiver(
+        this,
+        unlockReceiver,
+        new IntentFilter(Intent.ACTION_USER_PRESENT),
+        ContextCompat.RECEIVER_NOT_EXPORTED);
     generalNumbers = getPreferences(0).getBoolean("generalNumbers", false);
     photoPicker =
         registerForActivityResult(
@@ -84,7 +97,19 @@ public class MainActivity extends ComponentActivity {
   @Override
   protected void onResume() {
     super.onResume();
-    if (nativeSession != null && nativeSession.active()) nativeSession.panel();
+    if (nativeSession != null) nativeSession.resumed();
+  }
+
+  @Override
+  protected void onPause() {
+    if (nativeSession != null) nativeSession.paused();
+    super.onPause();
+  }
+
+  @Override
+  protected void onDestroy() {
+    if (unlockReceiver != null) unregisterReceiver(unlockReceiver);
+    super.onDestroy();
   }
 
   @Override
@@ -288,10 +313,11 @@ public class MainActivity extends ComponentActivity {
           choose(draft);
         },
         true);
+    nativeSession.lastSessionCard();
     if (!serial.isEmpty()) {
-      label("Ostatnia centrala · " + serial);
+      label("Centrala · " + serial);
       button("Otwórz galerię", () -> gallery(0));
-      button("Nowa seria dla " + serial, () -> confirm(serial));
+      button("Rozpocznij nową serię dla " + serial, () -> confirm(serial));
     }
     hint("Zdjęcia w pełnej jakości • domyślnie OCR offline");
     scrollable();

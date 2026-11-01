@@ -1,6 +1,14 @@
-# Climagold QC — v1.3 preview: prefiks + identyfikator
+# Climagold QC — v1.4 preview: automatyczne kończenie i wznawianie serii
 
 Android 10+. **Serię zdjęć wykonuje normalna aplikacja aparatu telefonu**, otwierana przez `INTENT_ACTION_STILL_IMAGE_CAMERA`. Zachowuje swój interfejs, przyciski obiektywów 2×/3×, flesz i pozostałe funkcje dostępne na danym telefonie. Climagold QC nie zastępuje tego aparatu. Wbudowany podgląd CameraX służy wyłącznie do skanowania numeru z karty lub naklejki.
+
+## Co nowego w 1.4 — koniec i wznowienie sesji
+- Powrót z aparatu do aplikacji (Wstecz albo przełącznik aplikacji) automatycznie zamyka przedział czasowy serii i rozpoczyna przypisywanie zdjęć, bez dodatkowego przycisku wyboru serii.
+- Blokada lub wygaszenie ekranu zamyka serię także podczas używania zewnętrznego aparatu. Przez czas otwartej serii działa usługa pierwszoplanowa, która odbiera zdarzenie wyłączenia ekranu. Na Androidzie 13+ aplikacja prosi raz o powiadomienia, aby wyświetlać trwającą serię.
+- **Po blokadzie wróć po odblokowaniu do Climagold QC.** Wtedy aplikacja rozpocznie przypisywanie. Android 11+ wymaga systemowej zgody na modyfikację zdjęć utworzonych przez inną aplikację — nie można jej zatwierdzić za użytkownika ani przy zablokowanym ekranie. Nie obiecujemy przeniesienia plików podczas blokady.
+- Aplikacja czeka na zapis ostatnich ujęć. Uwzględnia datę wykonania i zapamiętaną granicę serii; zdjęcia wykonane po jej końcu są pomijane. Zdjęcia opublikowane z opóźnieniem są uwzględniane, jeśli mają datę wykonania w zakończonej serii.
+- Odmowa systemowej zgody lub błąd pozostawia zamkniętą serię do ponowienia przyciskiem **Dokończ przypisywanie zdjęć**. Nie pojawia się pętla próśb o zgodę. Gdy nie ma zdjęć, można ponowić wyszukiwanie albo zamknąć pustą serię.
+- Po ukończeniu pojawia się ostatnia zakończona sesja, jej numer i data. Przycisk **Dołącz do ostatniej sesji** pokazuje potwierdzenie i otwiera aparat dla tego samego numeru/folderu. Nowy przedział obejmuje tylko nowe zdjęcia; nie dołącza zdjęć z przerwy między sesjami.
 
 ## Co nowego w 1.3 — oznaczenia i podstawowy OCR offline
 Aplikacja traktuje prefiks i numer obok niego jako jedno oznaczenie:
@@ -36,22 +44,22 @@ Domyślny ML Kit działa offline i najlepiej rozpoznaje druk. Nie zapewnia nieza
 Zapamiętywany jest tylko adres usługi. Klucz jest używany w pamięci do jednej operacji, bez zapisu na dysku, w logach i repozytorium. W tej wersji chmurowy odczyt jest dostępny dla importowanego zdjęcia; skaner na żywo korzysta z OCR offline. Nie skonfigurowano konta Azure i nie wykonano odczytu na rzeczywistej usłudze podczas prac nad tą wersją.
 
 ## Instalacja
-[**Pobierz Climagold-QC-v1.3-preview.apk**](../releases/Climagold-QC-v1.3-preview.apk?raw=true) — gotowy plik dla Androida 10+ z kodu commita `378bd11`. Suma kontrolna znajduje się w `releases/SHA256SUMS`.
+[**Pobierz Climagold-QC-v1.4-preview.apk**](../releases/Climagold-QC-v1.4-preview.apk?raw=true) — gotowy plik dla Androida 10+ z bieżącej wersji źródeł 1.4. Suma kontrolna znajduje się w `releases/SHA256SUMS`.
 
-Zweryfikowano podpis APK. **Podpis v1.3 różni się od historycznego APK v1.1**, więc Android nie pozwoli zainstalować go jako aktualizacji tamtej wersji. Nie odinstalowuj używanej aplikacji z otwartą sesją; wcześniej zakończ serię i zabezpiecz zdjęcia. Zachowanie podpisu starej instalacji wymaga oryginalnego klucza podpisującego, którego nie ma w bieżącym środowisku.
+Zweryfikowano podpis APK: **v1.4 ma ten sam podpis co udostępniony APK v1.3** i może być zainstalowany jako jego aktualizacja, bez odinstalowywania. Podpis jest inny niż historycznego APK v1.1. Zakończ aktywną serię przed aktualizacją. Nie usuwaj aplikacji z otwartą sesją; zmiana instalacji może usunąć jej stan.
 
-GitHub Actions nadal buduje artefakt `Climagold-QC-v1.3-preview-apk`. Historyczny [APK v1.1](../releases/Climagold-QC-v1.1-preview.apk) nie zawiera nowych funkcji.
+GitHub Actions nadal buduje artefakt `Climagold-QC-v1.4-preview-apk`. Historyczny [APK v1.1](../releases/Climagold-QC-v1.1-preview.apk) nie zawiera nowych funkcji.
 
 ## Praca z centralą
 1. Zeskanuj kartę/naklejkę, wczytaj zdjęcie albo wpisz numer. Domyślny OCR działa na telefonie, bez sieci.
 2. Przy pierwszym użyciu zezwól na dostęp do **wszystkich zdjęć** — jest niezbędny, ponieważ zdjęcia tworzy osobna aplikacja aparatu. Dostęp tylko do wybranych zdjęć nie wystarczy do automatycznego wykrywania nowej serii.
 3. Wybierz numer z listy i zatwierdź. Przy istniejących zdjęciach pojawi się informacja o tym samym folderze.
 4. Otworzy się aparat telefonu. Rób dowolną serię, używając jego zoomu, obiektywów, flesza i podglądu. Nie ma zatwierdzania każdego zdjęcia przez Climagold QC.
-5. Po zakończeniu wróć do Climagold QC przyciskiem Wstecz albo przez przełącznik aplikacji. Fabryczny aparat nie udostępnia przycisku „OK” kończącego sesję naszej aplikacji.
-6. Wybierz **Wybierz i przypisz zdjęcia**. Sprawdź listę nowych zdjęć, odznacz ewentualne obce zdjęcia i zatwierdź całą serię.
-7. **Android 11+:** zaakceptuj systemowe zezwolenie na modyfikację wybranej serii. Zdjęcia zostaną przeniesione do `DCIM/<numer>/`, bez dekodowania i ponownej kompresji. **Android 10:** aplikacja kopiuje serię do folderu centrali, pozostawiając oryginały w folderze aparatu; nie żąda zgody po każdym zdjęciu.
+5. Powrót z aparatu automatycznie kończy serię i uruchamia przypisywanie. Blokada ekranu zamyka serię; po odblokowaniu wróć do aplikacji, aby dokończyć przypisanie.
+6. **Android 11+:** zaakceptuj systemową zgodę na przeniesienie zdjęć do `DCIM/<numer>/`. Obrazy nie są ponownie kompresowane. **Android 10:** aplikacja kopiuje serię do folderu centrali, zachowując oryginały w aparacie.
+7. Po zapisaniu możesz wybrać **Dołącz do ostatniej sesji** i potwierdzić dodawanie kolejnych zdjęć do tego samego folderu.
 
-Sesja i jej numer są zapamiętywane również po ponownym otwarciu aplikacji. Można ponownie otworzyć aparat, dodać ujęcia albo zakończyć sesję bez przypisywania; zdjęcia nie zostaną wtedy usunięte. Nie zamykaj aplikacji podczas przypisywania. Błędy są raportowane; nieprzypisane oryginały pozostają w aparacie i można ponowić wybór serii.
+Stan zakończonej serii i postęp przypisywania są zapamiętywane. Nie zamykaj aplikacji podczas zapisu. Nieprzypisane zdjęcia pozostają w oryginalnym folderze; po odmowie zgody lub błędzie użyj **Dokończ przypisywanie zdjęć**. Serię można także zakończyć bez przypisywania — bez usuwania zdjęć.
 
 ## Numery i foldery
 - `C14015-23` rozwija się do C14015…C14023; `C14568 c14578` daje dwa numery do wyboru.
@@ -66,11 +74,12 @@ Zdjęcia powstają z jakością ustawioną w aparacie telefonu. Na Androidzie 11
 Podczas fotografowania używaj podglądu fabrycznego aparatu. Po przypisaniu dostępna jest też galeria centrali: szczypanie powiększa, przesuwanie przesuwa, podwójne stuknięcie dopasowuje obraz. Kolejne zdjęcia wybiera się przyciskami. Pomniejszanie podglądu nie zmienia pliku zdjęcia.
 
 ## Zweryfikowane i wymagające testu na telefonie
-- Lokalnie zbudowano APK v1.3 i uruchomiono Android Lint bez błędów. Przeszło 43 sprawdzenia parsera i 9 sprawdzeń adresu usługi OCR. CI wykonuje te same kontrole.
-- Wersja 1.3 nie obiecuje zgodności podpisu z historycznym APK.
+- Lokalnie zbudowano APK v1.4 i uruchomiono Android Lint bez błędów. Przeszło 43 sprawdzenia parsera, 9 sprawdzeń adresu usługi OCR, 22 sprawdzenia reguł sesji oraz 10 testów cyklu życia i przenoszenia zdjęć w Robolectric. CI wykonuje te same kontrole.
+- Podpis APK v1.4 jest zgodny z udostępnionym APK v1.3, ale nie z v1.1.
 - Nie testowano na fizycznym telefonie: uruchamiania aplikacji producenta, uprawnień MediaStore, przenoszenia zdjęć, skuteczności OCR i płynności. To wydanie testowe.
 - Android wybiera aplikację obsługującą standardowe uruchomienie aparatu; przy kilku aplikacjach może pokazać wybór. Dostępność obiektywów i funkcji zależy od telefonu i aparatu, nie od Climagold QC.
-- Wykrywane są nowe, ukończone obrazy w DCIM od rozpoczęcia sesji. System nie przekazuje identyfikatora „zdjęcie z naszej serii”, dlatego trzeba sprawdzić końcową listę. Inne zdjęcia utworzone lub zaimportowane w DCIM podczas sesji mogą na niej wystąpić. Pliki poza DCIM, filmy i część osobnych plików RAW nie są obsługiwane. Jeśli aparat jeszcze zapisuje zdjęcie, ponów wyszukiwanie.
+- Wykrywane są nowe, ukończone obrazy w DCIM od rozpoczęcia sesji. System nie przekazuje identyfikatora „zdjęcie z naszej serii”. Inne zdjęcia w DCIM z datą wykonania w tym samym przedziale mogą także zostać przypisane; w czasie sesji używaj aparatu tylko do bieżącej centrali. Przy braku daty wykonania używana jest data dodania z dokładnością do sekundy. Pliki poza DCIM, filmy i część osobnych plików RAW nie są obsługiwane. Jeśli aparat jeszcze zapisuje zdjęcie, ponów wyszukiwanie.
+- Wymuszone zatrzymanie aplikacji, restart telefonu lub ograniczenia procesów tła producenta mogą uniemożliwić odebranie zdarzenia blokady. Nie testowano tego wydania na fizycznym telefonie.
 - Brak gwarancji 120 Hz; odświeżaniem fabrycznego aparatu zarządza producent. Nasz ekran prosi o 120 Hz, jeśli telefon udostępnia taki tryb.
 - APK jest podpisany kluczem debug do pilotażu; przed wdrożeniem produkcyjnym trzeba przygotować stały podpis wydawniczy. Artefakt CI może mieć inny podpis debug niż udostępniony APK.
 
@@ -80,10 +89,12 @@ Logo pochodzi z repozytorium GeneratorV47, format przykładowej karty z `przykla
 JDK 17, Android SDK 35, Gradle 8.9, katalog `climagold-qc`:
 
 ```sh
-gradle assembleDebug lintDebug
+gradle assembleDebug lintDebug testDebugUnitTest
 mkdir -p /tmp/qc-tests
 javac -d /tmp/qc-tests app/src/main/java/pl/climagold/qc/Numbers.java tests/NumbersTest.java
 java -cp /tmp/qc-tests NumbersTest
+javac -d /tmp/qc-tests app/src/main/java/pl/climagold/qc/SessionWindow.java tests/SessionWindowTest.java
+java -cp /tmp/qc-tests SessionWindowTest
 javac -cp "$ANDROID_HOME/platforms/android-35/android.jar" -d /tmp/qc-tests app/src/main/java/pl/climagold/qc/HandwritingOcr.java tests/HandwritingEndpointTest.java
 java -cp "/tmp/qc-tests:$ANDROID_HOME/platforms/android-35/android.jar" pl.climagold.qc.HandwritingEndpointTest
 ```
