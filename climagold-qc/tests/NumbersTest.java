@@ -22,6 +22,15 @@ public class NumbersTest {
     check(Numbers.parse("Z123").equals(Arrays.asList("Z123")));
     check(Numbers.parse("C14568 C14568").size() == 1);
     check(Numbers.parse("230 V 50 Hz").isEmpty());
-    System.out.println("10 parser assertions passed");
+    check(Numbers.parseGeneral("Numer: 001234").equals(Arrays.asList("001234")));
+    check(Numbers.parseGeneral("AB-12/26 42 AB-12/26").equals(Arrays.asList("AB-12/26", "42")));
+    check(Numbers.parseGeneral("123-125").equals(Arrays.asList("123-125")));
+    check(Numbers.parseGeneral("Sam tekst").isEmpty());
+    check(Numbers.parseGeneral(null).isEmpty());
+    check(Numbers.parseGeneral("9".repeat(81)).isEmpty());
+    check(Numbers.folder("AB/001").equals("AB∕001"));
+    check(Numbers.parse("C14877/26").equals(Arrays.asList("C14877")));
+    check(Numbers.parse("C14015-99999").isEmpty());
+    System.out.println("19 parser assertions passed");
   }
 }

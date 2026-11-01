@@ -1,3 +1,13 @@
+# 1.2 preview
+
+- Nowy interfejs, układ akcji, przewijanie, animowane przejścia i efekty dotyku.
+- Import zdjęcia do OCR z podglądem, skalowaniem i obsługą orientacji.
+- Edycja wyniku OCR przed wyborem numeru.
+- Osobny tryb numerów ogólnych bez wymogu prefiksu.
+- Opcjonalny odczyt pisma ręcznego z importowanego zdjęcia przez Azure AI Vision Read; wymaga konfiguracji i jawnej akcji wysłania.
+- Uprawnienie aparatu dopiero przy użyciu skanera.
+- Zachowany aparat telefonu i przypisywanie całej serii bez rekompresji.
+
 # v1.1 preview — 2026-10-31
 
 - Serie zdjęć wykonuje zewnętrzna aplikacja aparatu telefonu z jej własnym interfejsem i obiektywami.

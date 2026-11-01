@@ -146,12 +146,13 @@ final class NativeSession {
     activity.capture = null;
     activity.serial = prefs.getString("serial", "");
     activity.layout();
-    activity.label("Aparat telefonu • " + activity.serial);
-    activity.label(
+    activity.hint("02 — ZDJĘCIA  /  03 — PRZYPISANIE");
+    activity.label("Seria · " + activity.serial);
+    activity.hint(
         "Po zdjęciach wróć tutaj przyciskiem Wstecz lub przełącznikiem aplikacji. Aparat zachowuje"
             + " własny wygląd i funkcje.");
     activity.button("Otwórz ponownie aparat", this::launch);
-    activity.button("OK • wybierz i przypisz serię", this::review);
+    activity.action("Wybierz i przypisz zdjęcia", this::review, true);
     activity.button("Galeria centrali", () -> activity.gallery(0));
     activity.button(
         "Zakończ bez przypisywania",
@@ -168,12 +169,7 @@ final class NativeSession {
                     })
                 .setNegativeButton("Wróć", null)
                 .show());
-    android.view.ViewGroup parent = (android.view.ViewGroup) activity.root.getParent();
-    if (parent != null) parent.removeView(activity.root);
-    ScrollView scroll = new ScrollView(activity);
-    scroll.setFillViewport(true);
-    scroll.addView(activity.root, new ScrollView.LayoutParams(-1, -2));
-    activity.setContentView(scroll);
+    activity.scrollable();
   }
 
   private static final class Photo {

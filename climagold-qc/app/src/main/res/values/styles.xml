@@ -1,0 +1,11 @@
+<resources>
+    <style name="Theme.Climagold" parent="android:style/Theme.Material.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:colorAccent">#F2CA7A</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
+        <item name="android:windowActionModeOverlay">true</item>
+        <item name="android:windowBackground">#0E1726</item>
+        <item name="android:windowSoftInputMode">adjustResize</item>
+    </style>
+</resources>

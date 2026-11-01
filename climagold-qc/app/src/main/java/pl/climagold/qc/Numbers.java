@@ -36,6 +36,20 @@ public final class Numbers {
     return new ArrayList<>(out);
   }
 
+  /** General identifiers are literal: no range expansion or guessed OCR substitutions. */
+  public static List<String> parseGeneral(String text) {
+    LinkedHashSet<String> out = new LinkedHashSet<>();
+    if (text == null) return new ArrayList<>(out);
+    Matcher tokens =
+        Pattern.compile("[A-Z0-9]+(?:[-/._][A-Z0-9]+)*").matcher(text.toUpperCase(Locale.ROOT));
+    while (tokens.find()) {
+      String token = tokens.group();
+      // Limit path component size and reject fragments of oversized identifiers.
+      if (token.length() <= 80 && token.matches(".*[0-9].*")) out.add(token);
+    }
+    return new ArrayList<>(out);
+  }
+
   public static String folder(String serial) {
     return serial.matches("[CK][0-9]+")
         ? serial.substring(1)
