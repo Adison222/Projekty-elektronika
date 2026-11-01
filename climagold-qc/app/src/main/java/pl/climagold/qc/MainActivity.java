@@ -13,9 +13,6 @@ import androidx.camera.core.*;
 import androidx.camera.lifecycle.ProcessCameraProvider;
 import androidx.camera.view.PreviewView;
 import androidx.core.content.ContextCompat;
-import com.google.mlkit.vision.common.InputImage;
-import com.google.mlkit.vision.text.TextRecognition;
-import com.google.mlkit.vision.text.latin.TextRecognizerOptions;
 import java.util.*;
 
 public class MainActivity extends ComponentActivity {
@@ -260,7 +257,7 @@ public class MainActivity extends ComponentActivity {
     input.setTextSize(18);
     input.setPadding(dp(16), dp(14), dp(16), dp(14));
     input.setBackground(surface(SURFACE, 16));
-    input.setHint("np. C14015-23 lub 001234");
+    input.setHint("np. C 14015, K 4567, IEW 123");
     input.setContentDescription("Numer centrali lub oznaczenie");
     input.setInputType(
         android.text.InputType.TYPE_CLASS_TEXT
@@ -281,8 +278,9 @@ public class MainActivity extends ComponentActivity {
         });
     root.addView(mode);
     hint(
-        "Tryb centrali: C, K, Z, IEW, RIEW. Tryb ogólny: cyfry i oznaczenia z cyframi. Zawsze"
-            + " sprawdź wynik OCR.");
+        "C — centrala, K — kompakt, IEW — inne zamówienie, RIEW — elementy automatyki. Prefiks i"
+            + " numer obok tworzą oznaczenie. Czytelne ręczne znaki też możesz spróbować odczytać"
+            + " offline.");
     action(
         "Dalej · sprawdź numer",
         () -> {
@@ -472,20 +470,16 @@ public class MainActivity extends ComponentActivity {
                 status.setText("Nie pobrano obrazu. Spróbuj ponownie.");
                 return;
               }
-              var recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS);
-              recognizer
-                  .process(
-                      InputImage.fromMediaImage(
-                          image.getImage(), image.getImageInfo().getRotationDegrees()))
-                  .addOnSuccessListener(t -> reviewText(t.getText()))
-                  .addOnFailureListener(e -> message(e.toString()))
-                  .addOnCompleteListener(
-                      t -> {
-                        image.close();
-                        recognizer.close();
-                        busy = false;
-                        status.setText("Gotowe — sprawdź odczytany numer");
-                      });
+              try {
+                android.graphics.Bitmap bitmap = image.toBitmap();
+                int rotation = image.getImageInfo().getRotationDegrees();
+                image.close();
+                readOffline(bitmap, rotation, true);
+              } catch (Exception | OutOfMemoryError e) {
+                image.close();
+                busy = false;
+                status.setText("Nie przygotowano obrazu do OCR. Spróbuj ponownie.");
+              }
             }
 
             public void onError(ImageCaptureException e) {
@@ -499,6 +493,10 @@ public class MainActivity extends ComponentActivity {
   }
 
   void reviewText(String text) {
+    reviewText(text, "");
+  }
+
+  void reviewText(String text, String contrastText) {
     EditText correction = new EditText(this);
     correction.setText(text);
     correction.setHint("Wpisz lub popraw odczytany numer");
@@ -511,6 +509,38 @@ public class MainActivity extends ComponentActivity {
     review.setOrientation(LinearLayout.VERTICAL);
     review.setPadding(dp(20), 0, dp(20), dp(12));
     review.addView(correction);
+    TextView types = new TextView(this);
+    types.setText("C — centrala · K — kompakt\nIEW — inne zamówienie\nRIEW — elementy automatyki");
+    types.setTextColor(MUTED);
+    types.setPadding(0, dp(8), 0, dp(8));
+    review.addView(types);
+    Button suggestions = new Button(this);
+    suggestions.setText("Podpowiedz oznaczenie C / K / IEW / RIEW");
+    suggestions.setAllCaps(false);
+    suggestions.setOnClickListener(
+        v -> {
+          LinkedHashSet<String> candidates =
+              new LinkedHashSet<>(Numbers.ocrSuggestions(correction.getText().toString()));
+          candidates.addAll(Numbers.ocrSuggestions(contrastText));
+          if (candidates.isEmpty()) {
+            message(
+                "Nie znaleziono prefiksu z numerem obok. Popraw tekst lub zrób wyraźniejsze"
+                    + " zdjęcie.");
+            return;
+          }
+          String[] values = candidates.toArray(new String[0]);
+          new android.app.AlertDialog.Builder(this)
+              .setTitle("Sugestie — porównaj ze zdjęciem")
+              .setItems(
+                  values,
+                  (d, which) -> {
+                    correction.setText(values[which]);
+                    correction.setSelection(correction.length());
+                  })
+              .setNegativeButton("Wróć", null)
+              .show();
+        });
+    review.addView(suggestions);
     Switch mode = new Switch(this);
     mode.setText("Numery ogólne, bez prefiksu");
     mode.setMinHeight(dp(56));
@@ -525,7 +555,9 @@ public class MainActivity extends ComponentActivity {
     scroll.addView(review);
     new android.app.AlertDialog.Builder(this)
         .setTitle("Sprawdź odczyt")
-        .setMessage("Popraw pomylone znaki i usuń zbędny tekst. Pismo ręczne może wymagać korekty.")
+        .setMessage(
+            "Sprawdź prefiks i numer obok niego. Podpowiedzi mogą zamieniać O/0, I/1, S/5, B/8 i"
+                + " Z/2. Nie są pewnym odczytem — porównaj każdy znak z oryginałem.")
         .setView(scroll)
         .setPositiveButton(
             "Wybierz numer",
@@ -689,20 +721,30 @@ public class MainActivity extends ComponentActivity {
     if (importedPhoto == null || busy) return;
     busy = true;
     status.setText("Rozpoznawanie numeru na urządzeniu…");
-    var recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS);
-    recognizer
-        .process(InputImage.fromBitmap(importedPhoto, 0))
-        .addOnSuccessListener(
-            t -> {
-              if (!isDestroyed()) reviewText(t.getText());
-            })
-        .addOnFailureListener(e -> message("Nie udało się odczytać zdjęcia. Spróbuj ponownie."))
-        .addOnCompleteListener(
-            t -> {
-              recognizer.close();
-              busy = false;
-              status.setText("Sprawdź wynik. W razie potrzeby wybierz wyraźniejsze zdjęcie.");
-            });
+    readOffline(importedPhoto, 0, false);
+  }
+
+  void readOffline(android.graphics.Bitmap bitmap, int rotation, boolean release) {
+    status.setText("Odczyt offline: oryginał i poprawiony kontrast…");
+    OfflineOcr.read(
+        bitmap,
+        rotation,
+        new OfflineOcr.Callback() {
+          public void success(String original, String contrast) {
+            if (release) bitmap.recycle();
+            busy = false;
+            if (isDestroyed()) return;
+            status.setText("Sprawdź prefiks i identyfikator. Podpowiedzi wymagają potwierdzenia.");
+            reviewText(original.isEmpty() ? contrast : original, contrast);
+          }
+
+          public void failure() {
+            if (release) bitmap.recycle();
+            busy = false;
+            if (!isDestroyed())
+              status.setText("Nie odczytano zdjęcia. Spróbuj ponownie lub wpisz oznaczenie.");
+          }
+        });
   }
 
   void gallery(int requested) {

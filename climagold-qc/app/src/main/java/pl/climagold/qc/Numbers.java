@@ -6,13 +6,17 @@ import java.util.regex.*;
 public final class Numbers {
   public static List<String> parse(String text) {
     LinkedHashSet<String> out = new LinkedHashSet<>();
+    if (text == null) return new ArrayList<>(out);
     Matcher m =
         Pattern.compile(
-                "(?<![A-Z0-9])((?:RIEW|IEW)[/:][A-Z0-9/.]+|Z[0-9]+|[CK]\\s*[0-9]{4,})(?:\\s*[-–]\\s*([0-9]+))?",
+                "(?<![A-Z0-9])((?:RIEW|IEW)[ \t]*[/:]?[ \t]*[0-9]+(?:[/.][A-Z0-9]+)*|Z[0-9]+|[CK][ "
+                    + "\t]*[0-9]+)(?![A-Z0-9])(?:[ \t]*[-–][ \t]*([0-9]+)(?![A-Z0-9]))?",
                 Pattern.CASE_INSENSITIVE)
             .matcher(text.toUpperCase(Locale.ROOT).replace((char) 92, (char) 47));
     while (m.find()) {
       String first = m.group(1).replaceAll("\\s", "");
+      if (first.length() > 80) continue;
+      first = first.replaceFirst("^(R?IEW)[/:]?", "$1/");
       String end = m.group(2);
       if (end == null) {
         out.add(first);
@@ -28,10 +32,41 @@ public final class Numbers {
       try {
         long a = Long.parseLong(digits), b = Long.parseLong(last);
         if (b < a || b - a > 500) continue;
-        for (long i = a; i <= b; i++)
+        for (long i = a; ; i++) {
           out.add(n.group(1) + String.format(Locale.ROOT, "%0" + digits.length() + "d", i));
+          if (i == b) break;
+        }
       } catch (NumberFormatException ignored) {
       }
+    }
+    return new ArrayList<>(out);
+  }
+
+  /** Suggestions only: never apply guessed substitutions to manually entered identifiers. */
+  public static List<String> ocrSuggestions(String text) {
+    LinkedHashSet<String> out = new LinkedHashSet<>(parse(text));
+    if (text == null) return new ArrayList<>(out);
+    Matcher m =
+        Pattern.compile(
+                "(?<![A-Z0-9])((?:R[ \t]*)?[I1L|][ \t]*E[ \t]*W|[CK])[ \t]*[/:]?[ "
+                    + "\t]*([0-9OIL|SBZ]+(?:[/.][0-9OIL|SBZ]+)*(?:[ \t]*[-–][ "
+                    + "\t]*[0-9OIL|SBZ]+)?)(?![A-Z0-9])")
+            .matcher(text.toUpperCase(Locale.ROOT).replace('\\', '/'));
+    while (m.find()) {
+      String digits = m.group(2);
+      if (!digits.matches(".*[0-9].*") || digits.length() > 70) continue;
+      String prefix = m.group(1).replaceAll("[ \t]", "");
+      if (prefix.endsWith("EW")) prefix = prefix.startsWith("R") ? "RIEW/" : "IEW/";
+      digits =
+          digits
+              .replace('O', '0')
+              .replace('I', '1')
+              .replace('L', '1')
+              .replace('|', '1')
+              .replace('S', '5')
+              .replace('B', '8')
+              .replace('Z', '2');
+      out.addAll(parse(prefix + digits));
     }
     return new ArrayList<>(out);
   }

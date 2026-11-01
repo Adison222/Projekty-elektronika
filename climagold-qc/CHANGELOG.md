@@ -1,3 +1,12 @@
+# 1.3 preview
+
+- Prefiksy C (centrala), K (kompakt), IEW (inne zamówienie), RIEW (inne zamówienie elementów automatyki) z numerem obok, ze spacją lub bez.
+- IEW/RIEW bez obowiązkowego separatora; kanoniczna postać z ukośnikiem, zachowane zera wiodące.
+- Dwa lokalne odczyty obrazu: oryginał i poprawiony kontrast, zarówno dla skanera, jak i importu.
+- Jawne sugestie korekty OCR dla znanych prefiksów i części liczbowej; brak automatycznej zamiany ręcznie wpisanych identyfikatorów.
+- Czytelne ręczne litery drukowane można próbować odczytać offline; skuteczność na rzeczywistych zdjęciach pozostaje do sprawdzenia. Nie dodano dedykowanego modelu pisma ręcznego.
+- 43 sprawdzenia parsera, w tym fałszywe dopasowania, OCR, zera i zakres przy granicy long.
+
 # 1.2 preview
 
 - Nowy interfejs, układ akcji, przewijanie, animowane przejścia i efekty dotyku.
