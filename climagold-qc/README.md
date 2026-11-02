@@ -1,10 +1,20 @@
-# Climagold QC — v1.7 preview
+# Climagold QC — v1.8 preview
 
 Android 10+. Dokumentacja fotograficzna central przy użyciu fabrycznego aparatu telefonu.
 
-[**Pobierz APK v1.7**](../releases/Climagold-QC-v1.7-preview.apk?raw=true)
+[**Pobierz APK v1.8**](../releases/Climagold-QC-v1.8-preview.apk?raw=true)
 
-## Zmiany w 1.7
+## Zmiany w 1.8 — zgodność z Galerią Samsung
+
+W 1.7 na telefonie użytkownika nie udało się uruchomić `ACTION_REVIEW_SECURE`; wyświetlał się komunikat i podgląd zastępczy. Komunikat nie rozróżniał braku obsługi od odmowy dostępu.
+
+Teraz aplikacja najpierw próbuje otworzyć pojedynczy album przez `ACTION_VIEW` z typem kolekcji obrazów i identyfikatorem `bucketId` odczytanym z MediaStore. Jeśli to wywołanie zostanie odrzucone, próbuje dotychczasowej jawnej listy zdjęć. Identyfikator nie jest zgadywany z numeru centrali. Żądanie pojedynczego albumu nie jest wysyłane, jeśli wyniki obejmują różne albumy lub nośniki. URI poszczególnych zdjęć wskazują właściwy nośnik.
+
+Przy braku obsługi podgląd zastępczy ma stały, dyskretny odnośnik **szczegóły zgodności z Galerią Samsung**. Pokazuje przyczynę odrzucenia każdej metody, wersję galerii, model telefonu i Androida. Nie wysyła tych informacji ani zdjęć. Usunięto zasłaniający przyciski komunikat toast.
+
+To poprawka obsługi zgodności i dodatkowa próba otwarcia albumu, **nie potwierdzenie działania na Samsungu użytkownika**. Nie znaleziono publicznego, gwarantowanego kontraktu Samsunga dla otwierania konkretnego albumu. Metoda `bucketId` pochodzi z [implementacji Gallery2](https://android.googlesource.com/platform/packages/apps/Gallery2/+/5563353/src/com/android/gallery3d/data/LocalSource.java); zachowanie One UI wymaga testu na telefonie. Samo zaakceptowanie wywołania nie dowodzi, że galeria respektuje filtr.
+
+## Zmiany zachowane z 1.7
 
 - **Zdjęcie numeru trafia do folderu centrali.** „Odczytaj numer” wykonuje pełne zdjęcie. Po poprawieniu/wybraniu numeru i zatwierdzeniu centrali oryginalny plik jest zapisywany w jej folderze, przed otwarciem aparatu do serii. Dotyczy też zdjęcia wczytanego z galerii: powstaje kopia bez ponownej kompresji, źródło pozostaje w swoim miejscu. OCR korzysta z pomniejszonego podglądu, ale do folderu trafiają oryginalne bajty udostępnione przez system. Zdjęcie zachowuje orientację EXIF. Android może ograniczać metadane źródła.
 - **Blokada krótsza niż 10 minut to przerwa.** Po odblokowaniu można kontynuować tę samą serię. Po upływie 10 minut blokady seria zostaje zamknięta z granicą czasu ustawioną na koniec tych 10 minut. Zwykły powrót z aparatu bez blokady nadal kończy serię.
@@ -46,9 +56,9 @@ Przy błędzie przenoszenia zdjęcia pozostają w dotychczasowych folderach; wyb
 
 **Centrale i zdjęcia** pokazuje foldery bezpośrednio w DCIM z cyfrą w nazwie i co najmniej jednym zdjęciem, z pominięciem folderów aparatu. Wyszukaj numer i dotknij folderu. Climagold pobiera wyłącznie jego zdjęcia i przekazuje je do `com.sec.android.gallery3d` jako ograniczony zestaw.
 
-Użyty jest systemowy kontrakt [`MediaStore.ACTION_REVIEW_SECURE`](https://developer.android.com/reference/android/provider/MediaStore#ACTION_REVIEW_SECURE): podstawowy obraz + jawna lista pozostałych URI w `ClipData`. Zwykłe `ACTION_VIEW` nie gwarantuje ograniczenia przewijania do danej centrali, dlatego nie jest używane jako zamiennik. Ten tryb podglądu może ograniczać edycję i udostępnianie. Nie jest to nawigacja po wszystkich albumach telefonu.
+Najpierw używana jest próba otwarcia albumu opisana powyżej, a następnie systemowy kontrakt [`MediaStore.ACTION_REVIEW_SECURE`](https://developer.android.com/reference/android/provider/MediaStore#ACTION_REVIEW_SECURE): podstawowy obraz + jawna lista pozostałych URI w `ClipData`. Nie otwieramy automatycznie pojedynczego obrazu zwykłym `ACTION_VIEW` ani ekranu wszystkich albumów jako zamiennika. Tryb chroniony może ograniczać edycję i udostępnianie.
 
-**Obsługa tego kontraktu zależy od wersji Galerii Samsung i wymaga sprawdzenia na telefonie.** Jeśli galeria nie obsługuje żądania albo folder ma ponad 500 zdjęć (limit rozmiaru przekazywanego komunikatu), aplikacja użyje swojego podglądu wyłącznie zdjęć centrali. Gdy zewnętrzna galeria się otworzy, lecz wyświetli nieprawidłowy zestaw, po powrocie dostępny jest **Podgląd zastępczy**. Nie otwieramy po cichu całej galerii telefonu.
+**Obsługa obu metod zależy od wersji Galerii Samsung.** W 1.7 telefon użytkownika odrzucił tryb chroniony; nowa metoda albumu nie została sprawdzona na tym urządzeniu. Jeśli galeria odrzuci oba żądania, aplikacja użyje swojego podglądu wyłącznie zdjęć centrali. Limit 500 URI dotyczy tylko trybu jawnej listy, nie próby otwarcia pojedynczego albumu. Gdy zewnętrzna galeria się otworzy, lecz wyświetli nieprawidłowy zestaw, po powrocie dostępne jest **Tylko zdjęcia tej centrali**.
 
 ## Oznaczenia
 
@@ -60,7 +70,7 @@ C/K mają numeryczne foldery (`C13932` → `DCIM/13932/`), pozostałe zachowują
 
 ## Instalacja i weryfikacja
 
-APK v1.7 ma ten sam podpis co udostępnione v1.3–v1.6; można instalować jako aktualizację bez odinstalowywania. Suma SHA256: `releases/SHA256SUMS`. Podpis debug służy do pilotażu; historyczny APK v1.1 i niezależne artefakty CI mogą mieć inny podpis.
+APK v1.8 ma ten sam podpis co udostępnione v1.3–v1.7; można instalować jako aktualizację bez odinstalowywania. Suma SHA256: `releases/SHA256SUMS`. Podpis debug służy do pilotażu; historyczny APK v1.1 i niezależne artefakty CI mogą mieć inny podpis.
 
 Kontrole: budowanie APK, Android Lint, testy parsera, okna sesji i Robolectric obejmujące blokadę krótszą niż 10 minut, granicę 10 minut i opóźnione wznowienie, zapis oryginału numeru i ponowienie po błędzie, ograniczoną listę przekazywaną galerii, przenoszenie partiami i częściowe niepowodzenie. Nie testowano na fizycznym Samsungu. Nie zmierzono rzeczywistej szybkości zapisu ani zachowania Galerii Samsung na urządzeniu — to wydanie testowe.
 
