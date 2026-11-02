@@ -57,10 +57,13 @@ final class NativeSession {
   void resumed() {
     visible = true;
     if (!active() || working || permissionVisible) return;
+    SessionPause.refresh(activity);
     boolean locked = SessionMonitorService.locked(activity);
-    if (locked) {
-      SessionMonitorService.close(activity, "Zablokowano lub wygaszono ekran");
-      return;
+    if (locked) return;
+    if (!ended()
+        && prefs.getLong("unlock_grace_until", 0) > 0
+        && prefs.getLong("unlock_grace_until", 0) >= android.os.SystemClock.elapsedRealtime()) {
+      prefs.edit().putBoolean("camera_away", false).remove("unlock_grace_until").apply();
     }
     if (SessionWindow.shouldFinish(
         active(),
@@ -90,8 +93,7 @@ final class NativeSession {
 
   void paused() {
     visible = false;
-    if (active() && SessionMonitorService.locked(activity))
-      SessionMonitorService.close(activity, "Zablokowano lub wygaszono ekran");
+    if (active() && SessionMonitorService.locked(activity)) SessionPause.refresh(activity);
   }
 
   boolean readBeforeConfirm(String serial) {
@@ -101,7 +103,7 @@ final class NativeSession {
         .setTitle("Dostęp do zdjęć")
         .setMessage(
             "Zezwól na wszystkie zdjęcia, aby wykrywać serię z aparatu telefonu. Powrót z aparatu"
-                + " lub blokada ekranu zakończy serię; następnie Android może poprosić o zgodę na"
+                + " kończy serię. Blokada do 10 minut to przerwa; Android może poprosić o zgodę na"
                 + " przeniesienie.")
         .setPositiveButton(
             "Kontynuuj",
@@ -197,6 +199,7 @@ final class NativeSession {
   }
 
   void launch() {
+    SessionPause.refresh(activity);
     if (!active() || ended() || working) {
       panel();
       return;
@@ -251,8 +254,8 @@ final class NativeSession {
       activity.action("Dokończ przypisywanie zdjęć", () -> finish("Ponowienie przypisania"), true);
     } else {
       activity.hint(
-          "Powrót z aparatu lub blokada ekranu kończy serię. Po odblokowaniu zaakceptuj systemową"
-              + " zgodę na przeniesienie, jeśli się pojawi.");
+          "Blokada krótsza niż 10 minut nie kończy serii. Możesz kontynuować zdjęcia. Powrót z"
+              + " aparatu bez blokady kończy serię.");
       activity.button("Otwórz aparat", this::launch);
       activity.action("Zakończ i przypisz zdjęcia", () -> finish("Zakończono przyciskiem"), true);
     }
@@ -357,19 +360,17 @@ final class NativeSession {
     working = true;
     activity.layout();
     activity.label("Kończenie serii…");
-    activity.hint(
-        "Czekam na zapis ostatnich zdjęć przez aparat. Następnie przypiszę serię do folderu.");
+    activity.hint("Sprawdzam gotowe zdjęcia i przypisuję je do folderu centrali.");
     new Thread(
             () -> {
               try {
                 // Give the camera time to publish its last image, including delayed MediaStore
                 // writes.
-                long wait =
-                    Math.max(0, 5000 - (System.currentTimeMillis() - prefs.getLong("ended_ms", 0)));
-                if (wait > 0) Thread.sleep(Math.min(wait, 5000));
                 Scan found = scan();
-                for (int attempt = 0; found.pending && attempt < 5; attempt++) {
-                  Thread.sleep(2000);
+                for (int attempt = 0;
+                    (found.pending || found.uris.isEmpty()) && attempt < 8;
+                    attempt++) {
+                  Thread.sleep(250);
                   found = scan();
                 }
                 if (found.pending)
@@ -497,25 +498,44 @@ final class NativeSession {
     new Thread(
             () -> {
               ArrayList<String> errors = new ArrayList<>();
-              for (String value : uris) {
-                Uri uri = Uri.parse(value);
+              if (Build.VERSION.SDK_INT >= 30) {
+                List<String> ordered = new ArrayList<>(uris);
+                for (int offset = 0; offset < ordered.size(); offset += 64) {
+                  Set<String> moved =
+                      PhotoMover.move(
+                          activity.getContentResolver(),
+                          ordered.subList(offset, Math.min(offset + 64, ordered.size())),
+                          target,
+                          errors);
+                  if (!recordProgress(moved)) {
+                    errors.add("Nie zapisano postępu");
+                    break;
+                  }
+                }
+              } else {
+                for (String value : uris) {
+                  try {
+                    copy(Uri.parse(value), target);
+                    if (!recordProgress(Collections.singleton(value)))
+                      throw new IOException("Nie zapisano postępu");
+                  } catch (Exception e) {
+                    errors.add(e.getMessage() == null ? "Błąd dostępu" : e.getMessage());
+                  }
+                }
+              }
+              // Capture late publications while consent or transfer was in progress.
+              if (errors.isEmpty()) {
                 try {
-                  if (Build.VERSION.SDK_INT >= 30) {
-                    ContentValues update = new ContentValues();
-                    update.put(MediaStore.Images.Media.RELATIVE_PATH, target);
-                    if (activity.getContentResolver().update(uri, update, null, null) != 1)
-                      throw new IOException("Nie zmieniono folderu");
-                  } else copy(uri, target);
+                  Scan late = scan();
                   HashSet<String> pending =
                       new HashSet<>(prefs.getStringSet("pending", Collections.emptySet()));
-                  pending.remove(value);
-                  if (!prefs
-                      .edit()
-                      .putStringSet("pending", pending)
-                      .putInt("saved_count", prefs.getInt("saved_count", 0) + 1)
-                      .commit()) throw new IOException("Nie zapisano postępu");
+                  pending.addAll(late.uris);
+                  if (!prefs.edit().putStringSet("pending", pending).commit())
+                    throw new IOException("Nie zapisano listy zdjęć");
+                  if (late.pending)
+                    errors.add("Aparat kończy zapis zdjęcia. Ponów przypisanie za chwilę.");
                 } catch (Exception e) {
-                  errors.add(e.getMessage() == null ? "Błąd dostępu" : e.getMessage());
+                  errors.add(e.getMessage());
                 }
               }
               activity.runOnUiThread(
@@ -538,6 +558,16 @@ final class NativeSession {
             },
             "session-transfer")
         .start();
+  }
+
+  private boolean recordProgress(Set<String> moved) {
+    HashSet<String> pending = new HashSet<>(prefs.getStringSet("pending", Collections.emptySet()));
+    pending.removeAll(moved);
+    return prefs
+        .edit()
+        .putStringSet("pending", pending)
+        .putInt("saved_count", prefs.getInt("saved_count", 0) + moved.size())
+        .commit();
   }
 
   private void copy(Uri source, String path) throws IOException {

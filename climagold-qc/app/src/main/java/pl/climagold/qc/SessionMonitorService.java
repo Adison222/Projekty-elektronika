@@ -10,14 +10,28 @@ import androidx.core.content.ContextCompat;
 public final class SessionMonitorService extends Service {
   static final String PREFS = "native_camera_session";
   private BroadcastReceiver receiver;
+  private final Handler timer = new Handler(Looper.getMainLooper());
+  private final Runnable checkPause = () -> updatePause();
+
+  private void updatePause() {
+    timer.removeCallbacks(checkPause);
+    long remaining = SessionPause.refresh(this);
+    var p = getSharedPreferences(PREFS, 0);
+    if (!p.contains("serial") || p.getLong("ended_ms", 0) > 0) stopSelf();
+    else if (remaining > 0) timer.postDelayed(checkPause, remaining);
+  }
 
   static boolean close(Context context, String reason) {
+    return closeAt(context, reason, System.currentTimeMillis());
+  }
+
+  static boolean closeAt(Context context, String reason, long end) {
     var prefs = context.getSharedPreferences(PREFS, 0);
     if (!prefs.contains("serial")) return false;
     if (prefs.getLong("ended_ms", 0) > 0) return true;
     return prefs
         .edit()
-        .putLong("ended_ms", SessionWindow.close(0, System.currentTimeMillis()))
+        .putLong("ended_ms", SessionWindow.close(0, end))
         .putString("end_reason", reason)
         .putBoolean("camera_away", false)
         .putBoolean("finish_attempted", false)
@@ -48,7 +62,7 @@ public final class SessionMonitorService extends Service {
         new Notification.Builder(this, "photo_session")
             .setSmallIcon(R.drawable.ic_qc)
             .setContentTitle("Trwa seria zdjęć")
-            .setContentText("Powrót do aplikacji lub blokada ekranu kończy serię.")
+            .setContentText("Blokada do 10 minut to przerwa. Wróć do aplikacji, aby zapisać serię.")
             .setContentIntent(open)
             .setOngoing(true)
             .build();
@@ -59,23 +73,19 @@ public final class SessionMonitorService extends Service {
         new BroadcastReceiver() {
           @Override
           public void onReceive(Context context, Intent intent) {
-            if (Intent.ACTION_SCREEN_OFF.equals(intent.getAction())) {
-              close(context, "Zablokowano lub wygaszono ekran");
-              stopSelf();
-            }
+            updatePause();
           }
         };
-    ContextCompat.registerReceiver(
-        this,
-        receiver,
-        new IntentFilter(Intent.ACTION_SCREEN_OFF),
-        ContextCompat.RECEIVER_NOT_EXPORTED);
+    IntentFilter events = new IntentFilter(Intent.ACTION_SCREEN_OFF);
+    events.addAction(Intent.ACTION_USER_PRESENT);
+    events.addAction(Intent.ACTION_SCREEN_ON);
+    ContextCompat.registerReceiver(this, receiver, events, ContextCompat.RECEIVER_NOT_EXPORTED);
   }
 
   @Override
   public int onStartCommand(Intent intent, int flags, int startId) {
     var prefs = getSharedPreferences(PREFS, 0);
-    if (locked(this)) close(this, "Zablokowano lub wygaszono ekran");
+    updatePause();
     if (!prefs.contains("serial") || prefs.getLong("ended_ms", 0) > 0) {
       stopSelf();
       return START_NOT_STICKY;
@@ -85,6 +95,7 @@ public final class SessionMonitorService extends Service {
 
   @Override
   public void onDestroy() {
+    timer.removeCallbacks(checkPause);
     if (receiver != null) unregisterReceiver(receiver);
     stopForeground(STOP_FOREGROUND_REMOVE);
     super.onDestroy();

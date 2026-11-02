@@ -22,5 +22,5 @@ jobs:
           java -cp /tmp/qc-tests SessionWindowTest
       - uses: actions/upload-artifact@v4
         with:
-          name: Climagold-QC-v1.6-preview-apk
+          name: Climagold-QC-v1.7-preview-apk
           path: climagold-qc/app/build/outputs/apk/debug/*.apk

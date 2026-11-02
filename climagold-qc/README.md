@@ -1,61 +1,72 @@
-# Climagold QC — v1.6 preview
+# Climagold QC — v1.7 preview
 
-Aplikacja Android 10+ do fotografowania central. Zdjęcia wykonuje zwykły aparat telefonu ze swoimi obiektywami i ustawieniami. Climagold wybiera numer, pilnuje serii i porządkuje pliki.
+Android 10+. Dokumentacja fotograficzna central przy użyciu fabrycznego aparatu telefonu.
 
-[**Pobierz APK v1.6**](../releases/Climagold-QC-v1.6-preview.apk?raw=true)
+[**Pobierz APK v1.7**](../releases/Climagold-QC-v1.7-preview.apk?raw=true)
 
-## Co zmieniono
+## Zmiany w 1.7
 
-- Prostszy ekran startowy: **Nowa seria zdjęć** i **Centrale i zdjęcia**, a po zakończeniu serii także możliwość dołączenia do ostatniej sesji.
-- Kolejność pracy: numer → zdjęcia → zapis. Czytelne przyciski, granatowo-złote kolory, efekty dotyku i krótkie przejścia respektujące systemowe wyłączenie animacji.
-- Sugestie numerów wyświetlają się od razu po OCR i podczas wpisywania. Nie trzeba ich osobno otwierać.
-- Przeglądarka central z wyszukiwaniem, liczbą zdjęć i otwieraniem galerii konkretnego folderu.
-- Naprawiono **Invalid column date_taken**: zapytania używają właściwej kolumny Android MediaStore `datetaken`, przez stałą `DATE_TAKEN`.
-- Usunięto Azure, konfigurację usługi i uprawnienie do Internetu. Odczyt wydruku i pisma ręcznego odbywa się lokalnie.
-- Dodano mały model uczony na ręcznych literach i cyfrach oraz odczyt ograniczony do znanych prefiksów i numeru. To funkcja eksperymentalna; każdą propozycję trzeba sprawdzić.
+- **Zdjęcie numeru trafia do folderu centrali.** „Odczytaj numer” wykonuje pełne zdjęcie. Po poprawieniu/wybraniu numeru i zatwierdzeniu centrali oryginalny plik jest zapisywany w jej folderze, przed otwarciem aparatu do serii. Dotyczy też zdjęcia wczytanego z galerii: powstaje kopia bez ponownej kompresji, źródło pozostaje w swoim miejscu. OCR korzysta z pomniejszonego podglądu, ale do folderu trafiają oryginalne bajty udostępnione przez system. Zdjęcie zachowuje orientację EXIF. Android może ograniczać metadane źródła.
+- **Blokada krótsza niż 10 minut to przerwa.** Po odblokowaniu można kontynuować tę samą serię. Po upływie 10 minut blokady seria zostaje zamknięta z granicą czasu ustawioną na koniec tych 10 minut. Zwykły powrót z aparatu bez blokady nadal kończy serię.
+- **Szybsze przypisywanie.** Usunięto obowiązkowe 5 sekund oczekiwania. Gotowe zdjęcia są przypisywane partiami po maksymalnie 64 wpisy MediaStore, bez kopiowania i kompresowania obrazów na Androidzie 11+. Postęp jest utrwalany po partii. Aparaty, które jeszcze zapisują, mają krótkie ponowienia; po przeniesieniu aplikacja ponownie sprawdza zdjęcia opublikowane z opóźnieniem. W razie niegotowego zdjęcia można ponowić zapis.
+- **Opcjonalna jednorazowa konfiguracja zapisu bez każdorazowego pytania** na Androidzie 12+ przez systemowe uprawnienie zarządzania multimediami.
+- **Podgląd w Galerii Samsung** dostaje wyłącznie listę zdjęć wybranego folderu/centrali. Lista central i wyszukiwanie pozostają w Climagold.
+- **Usunięto odczyt pisma ręcznego**, model, jego dane i bibliotekę TensorFlow Lite. Pozostaje OCR wydruków offline oraz ręczne wpisywanie numeru. Azure pozostaje usunięte.
 
-## Instalacja i odzyskanie zakończonej serii
+## Pierwsza konfiguracja szybkiego zapisu na Samsungu
 
-APK v1.6 ma ten sam podpis co udostępnione wersje v1.3–v1.5: instaluj jako aktualizację, **bez odinstalowywania aplikacji**. Zachowasz stan oczekującej serii. Po aktualizacji wróć do zakończonej serii i naciśnij **Dokończ przypisywanie zdjęć**. Poprawka błędu daty obejmuje wyszukiwanie zdjęć i kopiowanie na Androidzie 10.
+Na Androidzie 12 lub nowszym otwórz **Ustawienia zapisu → Włącz szybki zapis**:
 
-Podpis różni się od historycznego APK v1.1. Jest to podpis debug do pilotażu; artefakty GitHub Actions mogą mieć inny podpis niż publikowany APK. Sumy plików znajdują się w `releases/SHA256SUMS`.
+1. Zezwól na dostęp do **wszystkich zdjęć** i metadanych lokalizacji zdjęć.
+2. Na ekranie systemowym włącz dla Climagold **Zarządzanie multimediami**.
+3. Wróć do aplikacji. Ekran pokaże, czy wymagane uprawnienia są aktywne.
 
-## Fotografowanie
+Android wymaga także `ACCESS_MEDIA_LOCATION`, aby żądanie modyfikacji mediów nie wyświetlało okna zgody. Nie jest to uprawnienie do bieżącej pozycji GPS telefonu. Aplikacja nie pobiera lokalizacji telefonu ani nie wysyła zdjęć.
 
-1. Wybierz **Nowa seria zdjęć**. Wpisz numer, zeskanuj oznaczenie aparatem albo wczytaj jego zdjęcie.
-2. Wybierz automatyczną podpowiedź lub popraw numer. Potwierdź właściwą centralę i wybierz **Rób zdjęcia**.
-3. Rób serię aparatem telefonu. Nie trzeba zatwierdzać każdego ujęcia.
-4. Wróć do Climagold: seria zakończy się i rozpocznie zapis. Blokada lub wygaszenie ekranu także zamyka przedział serii. **Po odblokowaniu wróć do aplikacji**, żeby dokończyć zapis.
-5. Android 11+ pokaże zgodę na przeniesienie zdjęć do `DCIM/<numer>/`. Android 10 kopiuje zdjęcia i zachowuje oryginały. Obrazy nie są ponownie kompresowane.
-6. Aby zrobić kolejne ujęcia tej samej centrali, wybierz **Dołącz do ostatniej sesji** i potwierdź. Zdjęcia z przerwy pomiędzy seriami nie są dołączane.
+To systemowe uprawnienie, nie obchodzenie zabezpieczeń przez nakładkę. Sama nakładka na aparat Samsunga nie zmienia właściciela zdjęć i nie znosi zgód. Aplikacja nadal wykonuje wymagane przez Android żądanie zapisu, ale system może je zatwierdzić automatycznie po nadaniu tych uprawnień. Bez nich oraz na Androidzie 11 pozostaje zgoda na partię zdjęć. Android 10 zachowuje dotychczasowe kopiowanie do folderu z pozostawieniem oryginałów.
 
-Potrzebny jest dostęp do wszystkich zdjęć, ponieważ tworzy je zewnętrzny aparat. Powiadomienie trwającej serii pozwala usłudze monitorować blokadę. Systemowej zgody na modyfikację cudzych zdjęć nie da się potwierdzić przy zablokowanym ekranie. Odmowa lub błąd zachowują serię do ponowienia. Zakończenie bez przypisywania nie usuwa zdjęć.
+**Zdjęcia z fabrycznego aparatu nadal są przypisywane po zakończeniu serii.** Nie wdrożono przenoszenia na bieżąco podczas pracy aparatu Samsunga ani nakładki ingerującej w jego interfejs. Bezpośredni zapis w docelowym folderze dotyczy zdjęcia numeru wykonanego przez Climagold. Nie zmieniamy aparatu do fotografowania serii.
 
-## Numery i odczyt
+Źródło wymagań systemowych: [Android — Media management permission](https://developer.android.com/training/data-storage/shared/media#media-management-permission).
 
-Obsługiwane prefiksy: **C, K, IEW, RIEW, R, Z**, np. `C13932`, `K0042`, `IEW123`, `RIEW123`, `R14577`, `Z123`. Prefiks musi mieć numer obok siebie. Między prefiksem a cyframi wynik nie zawiera `/`; stary zapis jest normalizowany. Zera wiodące pozostają.
+## Naturalny przebieg pracy
 
-- **Wydruk:** dwa lokalne odczyty ML Kit, oryginału i obrazu o podniesionym kontraście. Sugestie uwzględniają typowe pomyłki liter i cyfr.
-- **Pismo ręczne:** wybierz tę opcję w skanerze lub przy wczytanym zdjęciu. Zaznacz palcem jeden wiersz zawierający tylko prefiks i numer, następnie wybierz rozpoznawanie. Model rozpoznaje osobne znaki, a reguły składają tylko dozwolone prefiksy i cyfry. Najlepszy materiał to ciemne, oddzielne litery drukowane i cyfry na jasnym tle. Pismo łączone, nakładające się znaki, linie tabeli, cień i obrót mogą uniemożliwić odczyt. Wtedy popraw kadr lub wpisz numer.
-- **Inny format numeru:** pozwala użyć samych cyfr albo niestandardowego oznaczenia. Ręczny model jest przeznaczony do znanych prefiksów, nie do dowolnego tekstu.
+1. **Nowa seria zdjęć** → zeskanuj wydruk, wczytaj zdjęcie albo wpisz numer.
+2. Podpowiedzi pojawią się automatycznie. Sprawdź numer i wybierz **Rób zdjęcia**. Jeżeli użyto OCR, zdjęcie numeru zostanie zapisane w tym folderze.
+3. Fotografuj fabrycznym aparatem Samsunga, korzystając z jego obiektywów i ustawień.
+4. Możesz zablokować telefon na mniej niż 10 minut i wrócić do tej samej serii. Jeżeli po odblokowaniu widzisz Climagold zamiast aparatu, wybierz **Otwórz aparat**.
+5. Powrót z aparatu bez blokady albo **Zakończ i przypisz zdjęcia** zamyka serię i uruchamia przypisywanie. Po długiej blokadzie wróć do Climagold po odblokowaniu, aby dokończyć zapis.
+6. **Dołącz do ostatniej sesji** pozwala po potwierdzeniu zrobić kolejne zdjęcia tej samej centrali. Nie dołącza zdjęć wykonanych w przerwie pomiędzy seriami.
 
-Propozycje są edytowalne, nigdy nie rozpoczynają serii bez potwierdzenia. Nie należy traktować ich jako pewnego odczytu. [Opis modelu, źródła danych i wyniki pomiarów](model/README.md).
+Błąd zapisu zdjęcia numeru zachowuje jego prywatny oryginał do ponowienia. Po ponownym uruchomieniu aplikacji dostępne jest **Dokończ numer ze zdjęcia**. Nowa seria lub anulowanie odczytu odrzuca niezapisany szkic. Zdjęcie numeru już zapisane w folderze pozostaje tam także wtedy, gdy później anulujesz serię w aparacie.
 
-## Centrale i zdjęcia
+Przy błędzie przenoszenia zdjęcia pozostają w dotychczasowych folderach; wybierz **Dokończ przypisywanie zdjęć**. Nie odinstalowuj aplikacji z niezapisanym szkicem lub oczekującą serią.
 
-Lista pokazuje foldery bezpośrednio w DCIM, zawierające zdjęcia i cyfrę w nazwie, z pominięciem folderów aparatu. Najnowsze są na górze. Wpisz numer w wyszukiwarkę i dotknij folderu, aby otworzyć jego zdjęcia w aplikacji. Galeria obsługuje powiększanie, przesuwanie i kolejne zdjęcia.
+## Galeria Samsung
 
-C/K mają wspólne nazwy liczbowe (`C13932` → `DCIM/13932/`), więc lista pokazuje rzeczywistą nazwę `13932`, bez zgadywania prefiksu. Pozostałe zachowują prefiks (`R14577` → `DCIM/R14577/`). Puste foldery nie są widoczne w MediaStore. Istniejące pliki nie są automatycznie reorganizowane.
+**Centrale i zdjęcia** pokazuje foldery bezpośrednio w DCIM z cyfrą w nazwie i co najmniej jednym zdjęciem, z pominięciem folderów aparatu. Wyszukaj numer i dotknij folderu. Climagold pobiera wyłącznie jego zdjęcia i przekazuje je do `com.sec.android.gallery3d` jako ograniczony zestaw.
 
-Zakres `C14015-23` rozwija się do C14015…C14023; `C14877/26` daje C14877 bez roku. Slash należący do dalszej części niestandardowego numeru jest zapisywany w pojedynczej nazwie folderu jako `∕`. Galeria wybranej centrali uwzględnia stare warianty nazw z separatorem.
+Użyty jest systemowy kontrakt [`MediaStore.ACTION_REVIEW_SECURE`](https://developer.android.com/reference/android/provider/MediaStore#ACTION_REVIEW_SECURE): podstawowy obraz + jawna lista pozostałych URI w `ClipData`. Zwykłe `ACTION_VIEW` nie gwarantuje ograniczenia przewijania do danej centrali, dlatego nie jest używane jako zamiennik. Ten tryb podglądu może ograniczać edycję i udostępnianie. Nie jest to nawigacja po wszystkich albumach telefonu.
 
-## Weryfikacja i ograniczenia
+**Obsługa tego kontraktu zależy od wersji Galerii Samsung i wymaga sprawdzenia na telefonie.** Jeśli galeria nie obsługuje żądania albo folder ma ponad 500 zdjęć (limit rozmiaru przekazywanego komunikatu), aplikacja użyje swojego podglądu wyłącznie zdjęć centrali. Gdy zewnętrzna galeria się otworzy, lecz wyświetli nieprawidłowy zestaw, po powrocie dostępny jest **Podgląd zastępczy**. Nie otwieramy po cichu całej galerii telefonu.
 
-Zbudowano APK, uruchomiono Android Lint, testy parsera, reguł sesji i Robolectric: cykl życia, przenoszenie, poprawna kolumna daty, automatyczne sugestie, foldery i dekoder ręcznych znaków. Sprawdzono również renderowane podglądy ekranów. Model sprawdzono na publicznych danych i syntetycznych oznaczeniach; szczegóły w dokumentacji modelu.
+## Oznaczenia
 
-Nie testowano tej wersji na fizycznym telefonie ani na rzeczywistych zdjęciach ręcznych oznaczeń użytkownika. Wydanie pozostaje testowe. Zachowanie zewnętrznego aparatu, uprawnień i procesów w tle zależy od telefonu. Wymuszone zatrzymanie aplikacji lub restart może uniemożliwić odebranie blokady.
+Obsługiwane prefiksy: **C, K, IEW, RIEW, R, Z**, np. `C13932`, `K0042`, `IEW123`, `RIEW123`, `R14577`, `Z123`. Między prefiksem a cyframi nie ma `/`. Zachowujemy zera wiodące. OCR wydruków działa offline w dwóch przebiegach i podpowiada typowe korekty; propozycję zawsze sprawdź.
 
-Wykrywanie serii opiera się na nowych zdjęciach w DCIM i czasie wykonania, z datą dodania jako rezerwą. Inne zdjęcia z tego samego przedziału też mogą zostać zakwalifikowane. Filmy, pliki poza DCIM i część osobnych RAW nie są obsługiwane. Przy opóźnionym zapisie aparatu ponów wyszukiwanie.
+C/K mają numeryczne foldery (`C13932` → `DCIM/13932/`), pozostałe zachowują prefiks (`R14577` → `DCIM/R14577/`). Przeglądarka pokazuje rzeczywistą nazwę, bez zgadywania C/K. Dotychczasowe pliki nie są reorganizowane automatycznie. Galeria wybranej centrali uwzględnia również wcześniejsze warianty jej folderów.
+
+`C14015-23` rozwija się do C14015…C14023; `C14877/26` daje C14877 bez roku. **Inny format numeru** pozwala wpisać samą liczbę lub niestandardowe oznaczenie. Slash w dalszej części nazwy folderu jest zastępowany przez `∕`.
+
+## Instalacja i weryfikacja
+
+APK v1.7 ma ten sam podpis co udostępnione v1.3–v1.6; można instalować jako aktualizację bez odinstalowywania. Suma SHA256: `releases/SHA256SUMS`. Podpis debug służy do pilotażu; historyczny APK v1.1 i niezależne artefakty CI mogą mieć inny podpis.
+
+Kontrole: budowanie APK, Android Lint, testy parsera, okna sesji i Robolectric obejmujące blokadę krótszą niż 10 minut, granicę 10 minut i opóźnione wznowienie, zapis oryginału numeru i ponowienie po błędzie, ograniczoną listę przekazywaną galerii, przenoszenie partiami i częściowe niepowodzenie. Nie testowano na fizycznym Samsungu. Nie zmierzono rzeczywistej szybkości zapisu ani zachowania Galerii Samsung na urządzeniu — to wydanie testowe.
+
+Usługa pierwszoplanowa pilnuje blokady. Wymuszone zatrzymanie procesu lub ograniczenia producenta mogą zakłócić działanie. Gdy system wstrzyma wykonanie timera podczas uśpienia, przy wznowieniu aplikacja sprawdza zapisany czas przerwy i zamyka okno na właściwej granicy 10 minut. Zmiana zegara w ramach tego samego uruchomienia telefonu nie wydłuża przerwy.
+
+Przypisywanie serii opiera się na nowych zdjęciach w DCIM i przedziale czasu; aparat nie nadaje identyfikatora naszej sesji. Inne zdjęcia z tego przedziału mogą też zostać przypisane. Filmy, część osobnych RAW i pliki spoza DCIM nie są obsługiwane. Bardzo późno opublikowane zdjęcia mogą wymagać ręcznego przypisania.
 
 ## Budowanie
 
@@ -70,6 +81,4 @@ javac -d /tmp/qc-tests app/src/main/java/pl/climagold/qc/SessionWindow.java test
 java -cp /tmp/qc-tests SessionWindowTest
 ```
 
-Model jest dołączony do APK, nie wymaga trenowania podczas budowania aplikacji. Workflow `.github/workflows/android.yml` wykonuje kontrole i publikuje artefakt APK.
-
-Logo pochodzi z repozytorium GeneratorV47. Informacje o danych i licencji wag: `model/README.md` oraz dołączony `MODEL_LICENSE.txt`.
+Workflow `.github/workflows/android.yml` buduje i udostępnia artefakt APK. Logo pochodzi z repozytorium GeneratorV47.

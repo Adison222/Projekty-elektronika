@@ -1,10 +1,10 @@
 # Projekty-elektronika
 Projekty związane z elektroniką.
 
-## Climagold QC — v1.6 preview
+## Climagold QC — v1.7 preview
 
-[**Pobierz APK v1.6**](releases/Climagold-QC-v1.6-preview.apk?raw=true) · [Instrukcja](climagold-qc/README.md)
+[**Pobierz APK v1.7**](releases/Climagold-QC-v1.7-preview.apk?raw=true) · [Instrukcja](climagold-qc/README.md)
 
-Prostszy interfejs fotografowania, przeglądarka folderów central, automatyczne sugestie numerów, naprawa błędu `Invalid column date_taken` oraz eksperymentalny odczyt ręcznych prefiksów i cyfr offline. Azure usunięto. Android 10+.
+Zdjęcie odczytanego numeru w folderze centrali, przerwa przy blokadzie do 10 minut, szybsze przypisywanie zdjęć, opcjonalne zarządzanie multimediami na Androidzie 12+ i podgląd zestawu zdjęć w Galerii Samsung. Usunięto rozpoznawanie pisma ręcznego. Aparat do serii pozostaje fabryczny; jego zdjęcia są przypisywane po zakończeniu serii.
 
-APK można instalować jako aktualizację udostępnionych v1.3–v1.5 bez odinstalowywania. Po aktualizacji można ponowić zapis oczekującej serii. Nie usuwaj aplikacji z niezakończonym przypisywaniem. Wersja testowa — szczegóły i ograniczenia w instrukcji.
+APK można instalować jako aktualizację udostępnionych v1.3–v1.6 bez odinstalowywania. Nie usuwaj aplikacji z oczekującą serią. Wersja testowa, niezweryfikowana na fizycznym Samsungu — szczegóły i ograniczenia w instrukcji.

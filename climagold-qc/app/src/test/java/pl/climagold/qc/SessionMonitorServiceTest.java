@@ -32,31 +32,72 @@ public class SessionMonitorServiceTest {
   }
 
   @Test
-  public void screenOffClosesExternalCameraWindowDurably() {
+  public void screenOffStartsDurablePauseWithoutClosingSeries() {
     prefs.edit().putString("serial", "C12345").putBoolean("camera_away", true).commit();
     var controller =
         Robolectric.buildService(SessionMonitorService.class).create().startCommand(0, 1);
+    Shadows.shadowOf(context.getSystemService(PowerManager.class)).setIsInteractive(false);
     context.sendBroadcast(new Intent(Intent.ACTION_SCREEN_OFF));
     Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();
-    assertTrue(prefs.getLong("ended_ms", 0) > 0);
-    assertFalse(prefs.getBoolean("camera_away", true));
-    assertFalse(prefs.getBoolean("finish_attempted", true));
-    assertEquals("C12345", prefs.getString("serial", ""));
-    long end = prefs.getLong("ended_ms", 0);
+    assertTrue(prefs.getLong("locked_at", 0) > 0);
+    assertEquals(0, prefs.getLong("ended_ms", 0));
+    assertTrue(prefs.getBoolean("camera_away", false));
+    long locked = prefs.getLong("locked_at", 0);
     controller.destroy();
-    assertTrue(SessionMonitorService.close(context, "Return after unlock"));
-    assertEquals(end, prefs.getLong("ended_ms", 0));
-    assertEquals("Zablokowano lub wygaszono ekran", prefs.getString("end_reason", ""));
+    var restarted =
+        Robolectric.buildService(SessionMonitorService.class).create().startCommand(0, 2);
+    assertEquals(locked, prefs.getLong("locked_at", 0));
+    assertEquals(0, prefs.getLong("ended_ms", 0));
+    restarted.destroy();
   }
 
   @Test
-  public void restartingMonitorOnLockedDeviceClosesPendingWindow() {
-    prefs.edit().putString("serial", "K42").putBoolean("camera_away", true).commit();
-    Shadows.shadowOf(context.getSystemService(KeyguardManager.class)).setKeyguardLocked(true);
-    var controller =
-        Robolectric.buildService(SessionMonitorService.class).create().startCommand(0, 1);
-    assertTrue(prefs.getLong("ended_ms", 0) > 0);
-    controller.destroy();
+  public void shortUnlockInsideAppContinuesInsteadOfTreatingItAsCameraReturn() {
+    prefs.edit().putString("serial", "C12345").putBoolean("camera_away", true).commit();
+    Shadows.shadowOf(context.getSystemService(PowerManager.class)).setIsInteractive(false);
+    SessionPause.refresh(context);
+    org.robolectric.shadows.ShadowSystemClock.advanceBy(java.time.Duration.ofMinutes(9));
+    Shadows.shadowOf(context.getSystemService(PowerManager.class)).setIsInteractive(true);
+    SessionPause.refresh(context); // Service may receive USER_PRESENT before the Activity.
+    var activity = Robolectric.buildActivity(MainActivity.class).create().start().resume();
+    assertEquals(0, prefs.getLong("ended_ms", 0));
+    assertFalse(prefs.contains("locked_at"));
+    assertFalse(prefs.getBoolean("camera_away", true));
+    assertTrue(activity.get().nativeSession.active());
+    activity.pause().stop().destroy();
+  }
+
+  @Test
+  public void tenMinutesClosesAtDeadlineEvenWhenTimerRunsLate() {
+    prefs.edit().putString("serial", "C12345").commit();
+    Shadows.shadowOf(context.getSystemService(PowerManager.class)).setIsInteractive(false);
+    SessionPause.refresh(context);
+    long start = prefs.getLong("locked_at", 0);
+    org.robolectric.shadows.ShadowSystemClock.advanceBy(java.time.Duration.ofMinutes(12));
+    Shadows.shadowOf(context.getSystemService(PowerManager.class)).setIsInteractive(true);
+    SessionPause.refresh(context);
+    assertEquals(start + SessionPause.LIMIT_MS, prefs.getLong("ended_ms", 0));
+    assertFalse(prefs.getBoolean("finish_attempted", true));
+    SessionPause.refresh(context);
+    assertEquals(start + SessionPause.LIMIT_MS, prefs.getLong("ended_ms", 0));
+  }
+
+  @Test
+  public void serviceTimerEndsSeriesAtTenMinutesWhileLocked() {
+    prefs.edit().putString("serial", "K42").commit();
+    Shadows.shadowOf(context.getSystemService(PowerManager.class)).setIsInteractive(false);
+    var service = Robolectric.buildService(SessionMonitorService.class).create().startCommand(0, 1);
+    long start = prefs.getLong("locked_at", 0);
+    Shadows.shadowOf(android.os.Looper.getMainLooper()).idleFor(java.time.Duration.ofMinutes(10));
+    assertEquals(start + SessionPause.LIMIT_MS, prefs.getLong("ended_ms", 0));
+    service.destroy();
+  }
+
+  @Test
+  public void monotonicPauseIgnoresWallClockChangesAndFallsBackAfterReboot() {
+    assertEquals(599999, SessionPause.elapsed(1000, 2000, 1, 99, 601999, 1));
+    assertEquals(600000, SessionPause.elapsed(1000, 2000, 1, 99, 602000, 1));
+    assertEquals(600000, SessionPause.elapsed(1000, 2000, 1, 601000, 1, 2));
   }
 
   @Test

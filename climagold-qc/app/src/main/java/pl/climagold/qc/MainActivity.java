@@ -36,12 +36,14 @@ public class MainActivity extends ComponentActivity {
   androidx.camera.core.Camera camera;
   BroadcastReceiver unlockReceiver;
   Runnable backAction;
-  boolean handwritingScan;
+  ScanAttachment scanAttachment;
+  boolean storageSettingsVisible;
 
   public void onCreate(Bundle b) {
     super.onCreate(b);
     getPreferences(0).edit().remove("ocrEndpoint").apply();
     nativeSession = new NativeSession(this);
+    scanAttachment = new ScanAttachment(this);
     unlockReceiver =
         new BroadcastReceiver() {
           @Override
@@ -102,6 +104,7 @@ public class MainActivity extends ComponentActivity {
   protected void onResume() {
     super.onResume();
     if (nativeSession != null) nativeSession.resumed();
+    if (storageSettingsVisible && !nativeSession.active()) storageSettings();
   }
 
   @Override
@@ -120,6 +123,17 @@ public class MainActivity extends ComponentActivity {
   public void onRequestPermissionsResult(int request, String[] permissions, int[] grants) {
     super.onRequestPermissionsResult(request, permissions, grants);
     nativeSession.permissionResult(request);
+    if (request == 44) {
+      if (hasPhotoRead()
+          && checkSelfPermission(Manifest.permission.ACCESS_MEDIA_LOCATION)
+              == android.content.pm.PackageManager.PERMISSION_GRANTED)
+        openMediaManagementSettings();
+      else {
+        storageSettings();
+        message("Pozostaje standardowe potwierdzanie zapisu serii.");
+      }
+      return;
+    }
     if (request == 43) {
       if (grants.length > 0 && grants[0] == android.content.pm.PackageManager.PERMISSION_GRANTED)
         browseUnits();
@@ -162,6 +176,7 @@ public class MainActivity extends ComponentActivity {
 
   void layout() {
     screenGeneration++;
+    storageSettingsVisible = false;
     backAction = this::home;
     input = null;
     root = new LinearLayout(this);
@@ -274,11 +289,91 @@ public class MainActivity extends ComponentActivity {
     hint("DOKUMENTACJA ZDJĘCIOWA");
     label("Co fotografujemy?");
     hint("Wybierz centralę. Rób zdjęcia aparatem telefonu. Wróć tutaj, żeby zapisać serię.");
-    action("+  Nowa seria zdjęć", this::numberEntry, true);
+    action(
+        "+  Nowa seria zdjęć",
+        () -> {
+          scanAttachment.discard();
+          numberEntry();
+        },
+        true);
+    if (scanAttachment.ready()) button("Dokończ numer ze zdjęcia", this::numberEntry);
     button("Centrale i zdjęcia", this::browseUnits);
     nativeSession.lastSessionCard();
+    button("Ustawienia zapisu", this::storageSettings);
     hint("Zdjęcia i rozpoznawanie pozostają na telefonie.");
     scrollable();
+  }
+
+  boolean hasPhotoRead() {
+    return checkSelfPermission(
+            android.os.Build.VERSION.SDK_INT >= 33
+                ? Manifest.permission.READ_MEDIA_IMAGES
+                : Manifest.permission.READ_EXTERNAL_STORAGE)
+        == android.content.pm.PackageManager.PERMISSION_GRANTED;
+  }
+
+  boolean fastMediaAccess() {
+    return android.os.Build.VERSION.SDK_INT >= 31
+        && hasPhotoRead()
+        && MediaStore.canManageMedia(this)
+        && checkSelfPermission(Manifest.permission.ACCESS_MEDIA_LOCATION)
+            == android.content.pm.PackageManager.PERMISSION_GRANTED;
+  }
+
+  void storageSettings() {
+    layout();
+    storageSettingsVisible = true;
+    label("Zapis zdjęć");
+    if (android.os.Build.VERSION.SDK_INT < 31) {
+      hint(
+          "Na tym Androidzie pozostaje standardowy zapis. Zapis bez każdorazowego pytania wymaga"
+              + " Androida 12 lub nowszego.");
+    } else {
+      hint(
+          fastMediaAccess()
+              ? "Szybki zapis włączony. Android może zatwierdzać przypisanie serii bez dodatkowych"
+                    + " pytań."
+              : "Zachowaj aparat Samsunga i włącz jednorazowo zarządzanie multimediami, aby Android"
+                    + " nie pytał o każdą serię.");
+      hint(
+          "Potrzebny jest dostęp do wszystkich zdjęć oraz metadanych lokalizacji zdjęć. Android"
+              + " wymaga obu do zapisu bez okna zgody. Aplikacja nie pobiera pozycji telefonu ani"
+              + " nie wysyła zdjęć.");
+      action(
+          fastMediaAccess() ? "Otwórz uprawnienie systemowe" : "Włącz szybki zapis",
+          () -> {
+            if (!hasPhotoRead()
+                || checkSelfPermission(Manifest.permission.ACCESS_MEDIA_LOCATION)
+                    != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+              requestPermissions(
+                  new String[] {
+                    android.os.Build.VERSION.SDK_INT >= 33
+                        ? Manifest.permission.READ_MEDIA_IMAGES
+                        : Manifest.permission.READ_EXTERNAL_STORAGE,
+                    Manifest.permission.ACCESS_MEDIA_LOCATION
+                  },
+                  44);
+            } else openMediaManagementSettings();
+          },
+          true);
+    }
+    hint(
+        "Zdjęcia aparatu Samsunga są przypisywane po zakończeniu serii. Zdjęcie odczytanego numeru"
+            + " zapisujemy już po zatwierdzeniu centrali.");
+    button("Wróć", this::home);
+    scrollable();
+  }
+
+  void openMediaManagementSettings() {
+    if (android.os.Build.VERSION.SDK_INT < 31) return;
+    try {
+      startActivity(
+          new Intent(
+              android.provider.Settings.ACTION_REQUEST_MANAGE_MEDIA,
+              Uri.parse("package:" + getPackageName())));
+    } catch (ActivityNotFoundException | SecurityException e) {
+      message("Telefon nie udostępnia tego ustawienia. Pozostaje standardowa zgoda na zapis.");
+    }
   }
 
   void numberEntry() {
@@ -460,7 +555,10 @@ public class MainActivity extends ComponentActivity {
                     ? "Ten numer ma już zdjęcia. Nowe zapiszę w folderze poniżej. Galeria obejmuje"
                         + " też wcześniejsze foldery tego oznaczenia.\n"
                     : "Nowa seria zdjęć.\n")
-                + path)
+                + path
+                + (scanAttachment.ready()
+                    ? "\nZdjęcie odczytanego numeru też trafi do tego folderu."
+                    : ""))
         .setPositiveButton(
             "Rób zdjęcia",
             (d, w) -> {
@@ -468,9 +566,9 @@ public class MainActivity extends ComponentActivity {
               draft = value;
               getPreferences(0).edit().putString("lastSerial", value).apply();
               count = 0;
-              openCamera(false);
+              saveScanAndStart();
             })
-        .setNegativeButton("Popraw", (d, w) -> home())
+        .setNegativeButton("Popraw", (d, w) -> numberEntry())
         .show();
   }
 
@@ -486,20 +584,6 @@ public class MainActivity extends ComponentActivity {
     }
     layout();
     label("Numer centrali");
-    RadioGroup modes = new RadioGroup(this);
-    modes.setOrientation(RadioGroup.HORIZONTAL);
-    RadioButton printed = new RadioButton(this), handwritten = new RadioButton(this);
-    printed.setId(View.generateViewId());
-    handwritten.setId(View.generateViewId());
-    printed.setText("Wydruk");
-    handwritten.setText("Pismo ręczne");
-    printed.setTextColor(Color.WHITE);
-    handwritten.setTextColor(Color.WHITE);
-    modes.addView(printed);
-    modes.addView(handwritten);
-    modes.check(handwritingScan ? handwritten.getId() : printed.getId());
-    modes.setOnCheckedChangeListener((g, id) -> handwritingScan = id == handwritten.getId());
-    root.addView(modes);
     hint("Wypełnij kadr numerem. Stuknij, aby ustawić ostrość; rozsuń palce, aby przybliżyć.");
     final int generation = screenGeneration;
     PreviewView preview = new PreviewView(this);
@@ -520,10 +604,12 @@ public class MainActivity extends ComponentActivity {
           }
         });
     action("Odczytaj numer", this::shoot, true);
+    button("Wpisz numer ręcznie", this::numberEntry);
     button(
-        "OK • zakończ",
+        "Anuluj odczyt",
         () -> {
-          if (!busy) home();
+          scanAttachment.discard();
+          home();
         });
     var future = ProcessCameraProvider.getInstance(this);
     future.addListener(
@@ -586,52 +672,111 @@ public class MainActivity extends ComponentActivity {
         ContextCompat.getMainExecutor(this));
   }
 
-  @androidx.annotation.OptIn(markerClass = ExperimentalGetImage.class)
+  void saveScanAndStart() {
+    if (!scanAttachment.ready()) {
+      openCamera(false);
+      return;
+    }
+    busy = true;
+    layout();
+    label("Zapisuję zdjęcie numeru…");
+    final String target = serial;
+    new Thread(
+            () -> {
+              try {
+                scanAttachment.save(target);
+                runOnUiThread(
+                    () -> {
+                      busy = false;
+                      if (!isDestroyed()) openCamera(false);
+                    });
+              } catch (Exception e) {
+                runOnUiThread(
+                    () -> {
+                      busy = false;
+                      if (isDestroyed()) return;
+                      numberEntry();
+                      message(e.getMessage() + ". Zdjęcie czeka na ponowienie.");
+                    });
+              }
+            },
+            "save-number-photo")
+        .start();
+  }
+
   void shoot() {
     if (capture == null || busy) return;
     busy = true;
-    status.setText("Przetwarzanie…");
+    status.setText("Zapis zdjęcia i odczyt numeru…");
     capture.setTargetRotation(getWindowManager().getDefaultDisplay().getRotation());
-    {
-      capture.takePicture(
-          ContextCompat.getMainExecutor(this),
-          new ImageCapture.OnImageCapturedCallback() {
-            public void onCaptureSuccess(ImageProxy image) {
-              if (image.getImage() == null) {
-                image.close();
-                busy = false;
-                status.setText("Nie pobrano obrazu. Spróbuj ponownie.");
-                return;
-              }
-              try {
-                android.graphics.Bitmap bitmap = image.toBitmap();
-                int rotation = image.getImageInfo().getRotationDegrees();
-                image.close();
-                if (handwritingScan) {
-                  android.graphics.Matrix matrix = new android.graphics.Matrix();
-                  matrix.postRotate(rotation);
-                  android.graphics.Bitmap rotated =
-                      android.graphics.Bitmap.createBitmap(
-                          bitmap, 0, 0, bitmap.getWidth(), bitmap.getHeight(), matrix, true);
-                  if (rotated != bitmap) bitmap.recycle();
-                  busy = false;
-                  showHandwritingCrop(rotated);
-                } else readOffline(bitmap, rotation, true);
-              } catch (Exception | OutOfMemoryError e) {
-                image.close();
-                busy = false;
-                status.setText("Nie przygotowano obrazu do OCR. Spróbuj ponownie.");
-              }
-            }
-
-            public void onError(ImageCaptureException e) {
-              busy = false;
-              status.setText("Nie wykonano skanu. Spróbuj ponownie.");
-              message(e.toString());
-            }
-          });
+    final java.io.File file;
+    try {
+      file = java.io.File.createTempFile("number-", ".jpg", getCacheDir());
+    } catch (java.io.IOException e) {
+      busy = false;
+      message("Nie przygotowano zdjęcia");
       return;
     }
+    capture.takePicture(
+        new ImageCapture.OutputFileOptions.Builder(file).build(),
+        ContextCompat.getMainExecutor(this),
+        new ImageCapture.OnImageSavedCallback() {
+          public void onImageSaved(ImageCapture.OutputFileResults result) {
+            new Thread(
+                    () -> {
+                      try {
+                        try (java.io.InputStream in = new java.io.FileInputStream(file)) {
+                          scanAttachment.stage(in, "image/jpeg", true);
+                        }
+                        android.graphics.Bitmap bitmap =
+                            decodeForOcr(android.graphics.ImageDecoder.createSource(file));
+                        runOnUiThread(
+                            () -> {
+                              if (isDestroyed()) {
+                                bitmap.recycle();
+                                busy = false;
+                                return;
+                              }
+                              readOffline(bitmap, 0, true);
+                            });
+                      } catch (Exception | OutOfMemoryError e) {
+                        runOnUiThread(
+                            () -> {
+                              busy = false;
+                              if (!isDestroyed())
+                                status.setText(
+                                    "Nie odczytano zdjęcia. Spróbuj ponownie lub wpisz numer.");
+                            });
+                      } finally {
+                        file.delete();
+                      }
+                    },
+                    "number-capture")
+                .start();
+          }
+
+          public void onError(ImageCaptureException e) {
+            file.delete();
+            busy = false;
+            if (!isDestroyed()) status.setText("Nie wykonano zdjęcia numeru. Spróbuj ponownie.");
+          }
+        });
+  }
+
+  static android.graphics.Bitmap decodeForOcr(android.graphics.ImageDecoder.Source source)
+      throws java.io.IOException {
+    return android.graphics.ImageDecoder.decodeBitmap(
+        source,
+        (decoder, info, src) -> {
+          decoder.setAllocator(android.graphics.ImageDecoder.ALLOCATOR_SOFTWARE);
+          int max = Math.max(info.getSize().getWidth(), info.getSize().getHeight());
+          if (max > 2400) {
+            double scale = 2400.0 / max;
+            decoder.setTargetSize(
+                Math.max(1, (int) (info.getSize().getWidth() * scale)),
+                Math.max(1, (int) (info.getSize().getHeight() * scale)));
+          }
+        });
   }
 
   void reviewText(String text) {
@@ -683,83 +828,6 @@ public class MainActivity extends ComponentActivity {
         .show();
   }
 
-  void showHandwritingCrop(android.graphics.Bitmap bitmap) {
-    if (bitmap == null) {
-      message("Najpierw wybierz zdjęcie");
-      return;
-    }
-    if (provider != null) provider.unbindAll();
-    capture = null;
-    importedPhoto = bitmap;
-    layout();
-    label("Zaznacz oznaczenie");
-    hint(
-        "Przeciągnij palcem wokół jednego wiersza: prefiks i cyfry. Najlepiej czytelne, oddzielne"
-            + " znaki na jasnym tle.");
-    NumberCropView crop = new NumberCropView(this, bitmap);
-    root.addView(crop, new LinearLayout.LayoutParams(-1, 0, 1));
-    status = new TextView(this);
-    status.setTextColor(MUTED);
-    root.addView(status);
-    action(
-        "Rozpoznaj pismo ręczne",
-        () -> {
-          android.graphics.Bitmap selected;
-          try {
-            selected = crop.crop();
-          } catch (Exception e) {
-            message(e.getMessage());
-            return;
-          }
-          busy = true;
-          status.setText("Odczyt liter i cyfr na telefonie…");
-          new Thread(
-                  () -> {
-                    try {
-                      List<IdentifierDecoder.Candidate> results =
-                          HandwrittenRecognizer.recognize(this, selected);
-                      List<String> candidates = new ArrayList<>();
-                      for (var result : results) candidates.add(result.text);
-                      runOnUiThread(
-                          () -> {
-                            busy = false;
-                            if (isDestroyed()) return;
-                            if (candidates.isEmpty()) {
-                              status.setText(
-                                  "Brak pewnego odczytu. Zaznacz ciaśniej lub wpisz numer.");
-                              return;
-                            }
-                            status.setText("Sprawdź odczytany prefiks i cyfry.");
-                            reviewText(candidates.get(0), candidates);
-                          });
-                    } catch (Exception | OutOfMemoryError e) {
-                      runOnUiThread(
-                          () -> {
-                            busy = false;
-                            if (!isDestroyed())
-                              status.setText(
-                                  e.getMessage() == null
-                                      ? "Nie odczytano oznaczenia. Spróbuj ciaśniejszego kadru."
-                                      : e.getMessage());
-                          });
-                    } finally {
-                      if (selected != bitmap) selected.recycle();
-                    }
-                  },
-                  "handwritten-number")
-              .start();
-        },
-        true);
-    button("Zaznacz całe zdjęcie", crop::reset);
-    button(
-        "Wpisz numer ręcznie",
-        () -> {
-          draft = "";
-          numberEntry();
-        });
-    button("Wróć", this::numberEntry);
-  }
-
   void importPhoto(Uri uri) {
     if (provider != null) provider.unbindAll();
     capture = null;
@@ -775,7 +843,6 @@ public class MainActivity extends ComponentActivity {
     status.setText("Wczytywanie zdjęcia…");
     root.addView(status);
     action("Odczytaj numer ze zdjęcia", this::recognizeImported, true);
-    button("Odczytaj pismo ręczne", () -> showHandwritingCrop(importedPhoto));
     button("Wybierz inne zdjęcie", () -> photoPicker.launch("image/*"));
     button("Wróć", this::home);
     importedPhoto = null;
@@ -783,19 +850,12 @@ public class MainActivity extends ComponentActivity {
     new Thread(
             () -> {
               try {
+                try (java.io.InputStream in = getContentResolver().openInputStream(uri)) {
+                  scanAttachment.stage(in, getContentResolver().getType(uri), false);
+                }
                 android.graphics.Bitmap bitmap =
-                    android.graphics.ImageDecoder.decodeBitmap(
-                        android.graphics.ImageDecoder.createSource(getContentResolver(), uri),
-                        (decoder, info, source) -> {
-                          decoder.setAllocator(android.graphics.ImageDecoder.ALLOCATOR_SOFTWARE);
-                          int max = Math.max(info.getSize().getWidth(), info.getSize().getHeight());
-                          if (max > 2400) {
-                            double scale = 2400.0 / max;
-                            decoder.setTargetSize(
-                                Math.max(1, (int) (info.getSize().getWidth() * scale)),
-                                Math.max(1, (int) (info.getSize().getHeight() * scale)));
-                          }
-                        });
+                    decodeForOcr(
+                        android.graphics.ImageDecoder.createSource(getContentResolver(), uri));
                 runOnUiThread(
                     () -> {
                       busy = false;
@@ -822,6 +882,12 @@ public class MainActivity extends ComponentActivity {
 
   void recognizeImported() {
     if (importedPhoto == null || busy) return;
+    try {
+      scanAttachment.arm();
+    } catch (java.io.IOException e) {
+      message(e.getMessage());
+      return;
+    }
     busy = true;
     status.setText("Rozpoznawanie numeru na urządzeniu…");
     readOffline(importedPhoto, 0, false);
@@ -951,7 +1017,7 @@ public class MainActivity extends ComponentActivity {
                               empty.setText(
                                   entries.isEmpty()
                                       ? "Nie ma jeszcze folderów central ze zdjęciami. Rozpocznij"
-                                            + " pierwszą serię."
+                                          + " pierwszą serię."
                                       : "Brak folderu o takim numerze.");
                               empty.setTextColor(MUTED);
                               empty.setPadding(0, dp(20), 0, 0);
@@ -1008,7 +1074,7 @@ public class MainActivity extends ComponentActivity {
                 runOnUiThread(
                     () -> {
                       if (!isDestroyed() && generation == screenGeneration)
-                        displayGallery(name, paths, photos, requested, fromBrowser);
+                        openSamsungGallery(name, paths, photos, requested, fromBrowser);
                     });
               } catch (Exception e) {
                 runOnUiThread(
@@ -1020,6 +1086,32 @@ public class MainActivity extends ComponentActivity {
             },
             "gallery-list")
         .start();
+  }
+
+  void openSamsungGallery(
+      String name, List<String> paths, List<Uri> photos, int requested, boolean fromBrowser) {
+    Intent intent = ExternalGallery.samsung(photos, requested);
+    if (intent != null) {
+      try {
+        startActivity(intent);
+        layout();
+        label(name);
+        hint("Podgląd zdjęć przekazano do Galerii Samsung.");
+        backAction = fromBrowser ? this::browseUnits : this::home;
+        button(
+            "Otwórz ponownie w Galerii Samsung",
+            () -> showGallery(name, paths, requested, fromBrowser));
+        button(
+            "Podgląd zastępczy", () -> displayGallery(name, paths, photos, requested, fromBrowser));
+        button("Wróć", backAction);
+        return;
+      } catch (ActivityNotFoundException | SecurityException e) {
+        message(
+            "Galeria Samsung nie udostępnia podglądu tego zestawu. Otwieram zdjęcia centrali w"
+                + " aplikacji.");
+      }
+    }
+    displayGallery(name, paths, photos, requested, fromBrowser);
   }
 
   void displayGallery(

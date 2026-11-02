@@ -5,6 +5,9 @@
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE"/>
   <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
   <uses-permission android:name="android.permission.CAMERA"/>
+  <uses-permission android:name="android.permission.MANAGE_MEDIA"/>
+  <uses-permission android:name="android.permission.ACCESS_MEDIA_LOCATION"/>
+  <queries><package android:name="com.sec.android.gallery3d"/></queries>
   <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>
   <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32"/>
   <uses-feature android:name="android.hardware.camera.any" android:required="true"/>
@@ -16,7 +19,7 @@
       </intent-filter>
     </activity>
     <service android:name=".SessionMonitorService" android:exported="false" android:foregroundServiceType="specialUse">
-      <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="Monitor an active external-camera photo session for screen-off to durably close its capture window; stops on session end."/>
+      <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="Monitor an active external-camera photo session and preserve a lock pause up to ten minutes; durably close its capture window on timeout; stops on session end."/>
     </service>
   </application>
 </manifest>
