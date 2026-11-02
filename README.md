@@ -1,10 +1,10 @@
 # Projekty-elektronika
 Projekty związane z elektroniką.
 
-## Climagold QC — v1.8 preview
+## Climagold QC — v1.9 preview
 
-[**Pobierz APK v1.8**](releases/Climagold-QC-v1.8-preview.apk?raw=true) · [Instrukcja](climagold-qc/README.md)
+[**Pobierz APK v1.9**](releases/Climagold-QC-v1.9-preview.apk?raw=true) · [Instrukcja](climagold-qc/README.md)
 
-Nowa próba otwierania albumów w Galerii Samsung i informacje o przyczynach niezgodności. Zdjęcie odczytanego numeru w folderze centrali, przerwa przy blokadzie do 10 minut, szybsze przypisywanie zdjęć, opcjonalne zarządzanie multimediami na Androidzie 12+ i podgląd zestawu zdjęć w Galerii Samsung. Usunięto rozpoznawanie pisma ręcznego. Aparat do serii pozostaje fabryczny; jego zdjęcia są przypisywane po zakończeniu serii.
+Kliknięcie centrali otwiera jej folder w menedżerze plików telefonu. Usunięto przeglądanie zdjęć wewnątrz aplikacji oraz integrację z albumami Galerii Samsung. Dodano prefiks **KS**: `KS303` → **`DCIM/KS303/`**, bez usuwania liter i bez ukośnika między prefiksem a numerem.
 
-APK można instalować jako aktualizację udostępnionych v1.3–v1.7 bez odinstalowywania. Nie usuwaj aplikacji z oczekującą serią. Wersja testowa, niezweryfikowana na fizycznym Samsungu — szczegóły i ograniczenia w instrukcji.
+Pozostają: fabryczny aparat do serii, zdjęcie numeru w folderze centrali, przerwa przy blokadzie do 10 minut i szybkie przypisywanie. APK można instalować jako aktualizację udostępnionych v1.3–v1.8 bez odinstalowywania. Nie usuwaj aplikacji z oczekującą serią. Wersja testowa — działanie menedżera plików wymaga sprawdzenia na telefonie.

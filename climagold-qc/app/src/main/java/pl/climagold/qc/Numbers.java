@@ -9,7 +9,7 @@ public final class Numbers {
     if (text == null) return new ArrayList<>(out);
     Matcher m =
         Pattern.compile(
-                "(?<![A-Z0-9])((?:RIEW|IEW)[ \t]*[/:]?[ \t]*[0-9]+(?:[/.][A-Z0-9]+)*|[ZR][ "
+                "(?<![A-Z0-9])((?:RIEW|IEW)[ \t]*[/:]?[ \t]*[0-9]+(?:[/.][A-Z0-9]+)*|(?:KS|[ZR])[ "
                     + "\t]*[/:]?[ \t]*[0-9]+|[CK][ \t]*[0-9]+)(?![A-Z0-9])(?:[ \t]*[-–][ "
                     + "\t]*([0-9]+)(?![A-Z0-9]))?",
                 Pattern.CASE_INSENSITIVE)
@@ -49,7 +49,7 @@ public final class Numbers {
     if (text == null) return new ArrayList<>(out);
     Matcher m =
         Pattern.compile(
-                "(?<![A-Z0-9])((?:R[ \t]*)?[I1L|][ \t]*E[ \t]*W|[CKZR])[ \t]*[/:]?[ "
+                "(?<![A-Z0-9])((?:R[ \t]*)?[I1L|][ \t]*E[ \t]*W|KS|[CKZR])[ \t]*[/:]?[ "
                     + "\t]*([0-9OIL|SBZ]+(?:[/.][0-9OIL|SBZ]+)*(?:[ \t]*[-–][ "
                     + "\t]*[0-9OIL|SBZ]+)?)(?![A-Z0-9])")
             .matcher(text.toUpperCase(Locale.ROOT).replace('\\', '/'));
@@ -92,7 +92,7 @@ public final class Numbers {
     return serial
         .trim()
         .toUpperCase(Locale.ROOT)
-        .replaceFirst("^(RIEW|IEW|[CKZR])[ \t]*[/\\\\∕∖:]?[ \t]*(?=[0-9])", "$1");
+        .replaceFirst("^(RIEW|IEW|KS|[CKZR])[ \t]*[/\\\\∕∖:]?[ \t]*(?=[0-9])", "$1");
   }
 
   public static String folder(String serial) {

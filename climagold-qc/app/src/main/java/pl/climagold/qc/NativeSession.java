@@ -259,7 +259,9 @@ final class NativeSession {
       activity.button("Otwórz aparat", this::launch);
       activity.action("Zakończ i przypisz zdjęcia", () -> finish("Zakończono przyciskiem"), true);
     }
-    activity.button("Zdjęcia tej centrali", () -> activity.gallery(0));
+    activity.button(
+        "Otwórz folder centrali",
+        () -> activity.openUnitFolder("DCIM/" + Numbers.folder(activity.serial) + "/"));
     activity.button("Wszystkie centrale", activity::browseUnits);
     activity.button(
         "Zakończ bez przypisywania",

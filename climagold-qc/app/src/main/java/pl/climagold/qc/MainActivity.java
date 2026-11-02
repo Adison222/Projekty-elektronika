@@ -38,7 +38,6 @@ public class MainActivity extends ComponentActivity {
   Runnable backAction;
   ScanAttachment scanAttachment;
   boolean storageSettingsVisible;
-  String galleryProblem = "";
 
   public void onCreate(Bundle b) {
     super.onCreate(b);
@@ -402,7 +401,7 @@ public class MainActivity extends ComponentActivity {
     input.setTextSize(20);
     input.setPadding(dp(16), dp(14), dp(16), dp(14));
     input.setBackground(surface(SURFACE, 16));
-    input.setHint("np. C13932, IEW123, R14577");
+    input.setHint("np. C13932, KS303, R14577");
     input.setContentDescription("Oznaczenie centrali");
     input.setInputType(
         android.text.InputType.TYPE_CLASS_TEXT
@@ -930,7 +929,7 @@ public class MainActivity extends ComponentActivity {
     capture = null;
     layout();
     label("Centrale");
-    hint("Wybierz folder, aby zobaczyć zdjęcia.");
+    hint("Wybierz centralę, aby otworzyć jej folder w menedżerze plików telefonu.");
     EditText search = new EditText(this);
     search.setHint("Szukaj numeru lub folderu");
     search.setTextColor(Color.WHITE);
@@ -1005,13 +1004,7 @@ public class MainActivity extends ComponentActivity {
                               LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
                               lp.topMargin = dp(12);
                               list.addView(row, lp);
-                              row.setOnClickListener(
-                                  v ->
-                                      showGallery(
-                                          entry.name,
-                                          Collections.singletonList(entry.path),
-                                          0,
-                                          true));
+                              row.setOnClickListener(v -> openUnitFolder(entry.path));
                             }
                             if (count == 0) {
                               TextView empty = new TextView(this);
@@ -1040,190 +1033,87 @@ public class MainActivity extends ComponentActivity {
         .start();
   }
 
-  void gallery(int requested) {
-    showGallery(serial, Numbers.folderPaths(serial), requested, false);
-  }
-
-  void showGallery(String name, List<String> paths, int requested, boolean fromBrowser) {
-    galleryProblem = "";
-    if (provider != null) provider.unbindAll();
-    capture = null;
-    layout();
-    label(name);
-    hint("Wczytywanie zdjęć…");
-    backAction = fromBrowser ? this::browseUnits : this::home;
-    button("Wróć", backAction);
+  void openUnitFolder(String path) {
     final int generation = screenGeneration;
+    if (busy) return;
+    busy = true;
     new Thread(
             () -> {
-              ArrayList<Uri> photos = new ArrayList<>();
-              ArrayList<String> buckets = new ArrayList<>(), volumes = new ArrayList<>();
-              try (android.database.Cursor c =
-                  getContentResolver()
-                      .query(
-                          MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
-                          new String[] {
-                            MediaStore.Images.Media._ID,
-                            MediaStore.Images.Media.BUCKET_ID,
-                            MediaStore.Images.Media.VOLUME_NAME
-                          },
-                          "relative_path IN ("
-                              + String.join(",", Collections.nCopies(paths.size(), "?"))
-                              + ") AND is_pending=0"
-                              + (android.os.Build.VERSION.SDK_INT >= 30 ? " AND is_trashed=0" : ""),
-                          paths.toArray(new String[0]),
-                          "date_added DESC")) {
-                if (c == null) throw new java.io.IOException();
-                while (c.moveToNext()) {
-                  buckets.add(c.getString(1));
-                  volumes.add(c.getString(2));
-                  photos.add(
-                      ContentUris.withAppendedId(
-                          MediaStore.Images.Media.getContentUri(
-                              c.isNull(2) ? MediaStore.VOLUME_EXTERNAL : c.getString(2)),
-                          c.getLong(0)));
+              try {
+                LinkedHashSet<String> volumes = new LinkedHashSet<>();
+                try (android.database.Cursor c =
+                    getContentResolver()
+                        .query(
+                            MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                            new String[] {MediaStore.Images.Media.VOLUME_NAME},
+                            "relative_path=? AND is_pending=0"
+                                + (android.os.Build.VERSION.SDK_INT >= 30
+                                    ? " AND is_trashed=0"
+                                    : ""),
+                            new String[] {path},
+                            null)) {
+                  if (c == null) throw new java.io.IOException("Nie odczytano lokalizacji folderu");
+                  while (c.moveToNext()) if (!c.isNull(0)) volumes.add(c.getString(0));
                 }
-                Intent album = ExternalGallery.album(buckets, volumes);
                 runOnUiThread(
                     () -> {
-                      if (!isDestroyed() && generation == screenGeneration)
-                        openSamsungGallery(name, paths, photos, requested, fromBrowser, album);
+                      busy = false;
+                      if (isDestroyed() || generation != screenGeneration) return;
+                      if (volumes.isEmpty()) {
+                        message("W tym folderze nie ma jeszcze zapisanych zdjęć.");
+                        return;
+                      }
+                      List<String> choices = new ArrayList<>(volumes);
+                      if (choices.size() == 1) launchFolder(path, choices.get(0));
+                      else
+                        new android.app.AlertDialog.Builder(this)
+                            .setTitle("Wybierz nośnik folderu")
+                            .setItems(
+                                choices.stream()
+                                    .map(
+                                        v ->
+                                            MediaStore.VOLUME_EXTERNAL_PRIMARY.equals(v)
+                                                ? "Pamięć telefonu"
+                                                : "Nośnik " + v)
+                                    .toArray(String[]::new),
+                                (d, which) -> launchFolder(path, choices.get(which)))
+                            .setNegativeButton("Wróć", null)
+                            .show();
                     });
               } catch (Exception e) {
                 runOnUiThread(
                     () -> {
-                      if (generation == screenGeneration)
-                        message("Nie odczytano zdjęć. Sprawdź dostęp do galerii.");
+                      busy = false;
+                      if (!isDestroyed() && generation == screenGeneration)
+                        message("Nie otwarto folderu: " + e.getMessage());
                     });
               }
             },
-            "gallery-list")
+            "open-unit-folder")
         .start();
   }
 
-  void openSamsungGallery(
-      String name,
-      List<String> paths,
-      List<Uri> photos,
-      int requested,
-      boolean fromBrowser,
-      Intent album) {
-    ExternalGallery.Result result =
-        ExternalGallery.open(this, album, ExternalGallery.samsung(photos, requested));
-    if (result.opened) {
-      layout();
-      label(name);
-      hint(
-          "Wysłano prośbę o otwarcie zdjęć tej centrali w Galerii Samsung. Jeżeli galeria pokazuje"
-              + " inne zdjęcia, użyj podglądu poniżej.");
-      backAction = fromBrowser ? this::browseUnits : this::home;
-      button(
-          "Otwórz ponownie w Galerii Samsung",
-          () -> showGallery(name, paths, requested, fromBrowser));
-      button(
-          "Tylko zdjęcia tej centrali",
-          () -> {
-            galleryProblem = "";
-            displayGallery(name, paths, photos, requested, fromBrowser);
-          });
-      button("Wróć", backAction);
-      return;
-    }
-    galleryProblem = photos.isEmpty() ? "" : result.detail;
-    displayGallery(name, paths, photos, requested, fromBrowser);
-  }
-
-  void galleryCompatibility() {
-    String version;
+  void launchFolder(String path, String volume) {
+    String reason =
+        "Telefon nie udostępnia aplikacji obsługującej otwieranie folderów. Włącz menedżer plików i"
+            + " spróbuj ponownie.";
     try {
-      version = getPackageManager().getPackageInfo(ExternalGallery.PACKAGE, 0).versionName;
-    } catch (android.content.pm.PackageManager.NameNotFoundException e) {
-      version = "nie zainstalowano";
+      Intent intent = FolderViewer.directory(path, FolderViewer.documentVolume(this, volume));
+      if (FolderViewer.open(this, intent)) return;
+    } catch (IllegalArgumentException e) {
+      reason = e.getMessage();
     }
     new android.app.AlertDialog.Builder(this)
-        .setTitle("Zgodność Galerii Samsung")
-        .setMessage(
-            galleryProblem
-                + "\n\nGaleria: "
-                + version
-                + "\nTelefon: "
-                + android.os.Build.MANUFACTURER
-                + " "
-                + android.os.Build.MODEL
-                + "\nAndroid: "
-                + android.os.Build.VERSION.RELEASE
-                + "\n\n"
-                + "Te informacje pomogą dobrać sposób otwierania albumu. Zdjęcia pozostają w"
-                + " folderze centrali.")
+        .setTitle("Nie otwarto folderu")
+        .setMessage(reason + "\n\n" + path)
         .setPositiveButton("OK", null)
+        .setNeutralButton(
+            "Kopiuj ścieżkę",
+            (d, w) -> {
+              getSystemService(android.content.ClipboardManager.class)
+                  .setPrimaryClip(ClipData.newPlainText("Folder centrali", path));
+            })
         .show();
-  }
-
-  void displayGallery(
-      String name, List<String> paths, List<Uri> photos, int requested, boolean fromBrowser) {
-    layout();
-    backAction = fromBrowser ? this::browseUnits : this::home;
-    if (photos.isEmpty()) {
-      label(name);
-      hint("Ten folder nie zawiera dostępnych zdjęć.");
-      button("Wróć", backAction);
-      return;
-    }
-    int index = Math.max(0, Math.min(requested, photos.size() - 1));
-    label(name + "   ·   " + (index + 1) + " / " + photos.size());
-    if (!galleryProblem.isEmpty()) {
-      TextView notice = new TextView(this);
-      notice.setText("Podgląd w aplikacji · szczegóły zgodności z Galerią Samsung ›");
-      notice.setTextColor(MUTED);
-      notice.setTextSize(13);
-      notice.setMinHeight(dp(48));
-      notice.setGravity(Gravity.CENTER_VERTICAL);
-      notice.setOnClickListener(v -> galleryCompatibility());
-      root.addView(notice, new LinearLayout.LayoutParams(-1, -2));
-    }
-    PhotoView photo = new PhotoView(this);
-    photo.setContentDescription("Zdjęcie " + (index + 1) + " centrali " + name);
-    root.addView(photo, new LinearLayout.LayoutParams(-1, 0, 1));
-    final int generation = screenGeneration;
-    new Thread(
-            () -> {
-              try {
-                android.graphics.Bitmap bitmap =
-                    android.graphics.ImageDecoder.decodeBitmap(
-                        android.graphics.ImageDecoder.createSource(
-                            getContentResolver(), photos.get(index)),
-                        (decoder, info, source) -> {
-                          int max = Math.max(info.getSize().getWidth(), info.getSize().getHeight());
-                          decoder.setTargetSampleSize(Math.max(1, max / 2048));
-                        });
-                runOnUiThread(
-                    () -> {
-                      if (isDestroyed() || generation != screenGeneration) {
-                        bitmap.recycle();
-                        return;
-                      }
-                      photo.setImageBitmap(bitmap);
-                      photo.post(photo::fit);
-                    });
-              } catch (Exception | OutOfMemoryError e) {
-                runOnUiThread(
-                    () -> {
-                      if (generation == screenGeneration) message("Nie otwarto zdjęcia");
-                    });
-              }
-            },
-            "gallery-photo")
-        .start();
-    if (index > 0)
-      button(
-          "‹  Poprzednie zdjęcie",
-          () -> displayGallery(name, paths, photos, index - 1, fromBrowser));
-    if (index + 1 < photos.size())
-      button(
-          "Następne zdjęcie  ›", () -> displayGallery(name, paths, photos, index + 1, fromBrowser));
-    button(
-        fromBrowser ? "Wróć do central" : nativeSession.active() ? "Wróć do serii" : "Wróć",
-        backAction);
   }
 
   void message(String text) {

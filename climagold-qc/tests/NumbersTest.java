@@ -82,6 +82,17 @@ public class NumbersTest {
         Numbers.parse("R14577 RIEW123 IEW123")
             .equals(Arrays.asList("R14577", "RIEW123", "IEW123")));
     check(Numbers.parse("AR14577 R\n14577 R").isEmpty());
+    check(Numbers.parse("KS303 ks 0042 KS/303").equals(Arrays.asList("KS303", "KS0042")));
+    check(Numbers.parse("KS303-305").equals(Arrays.asList("KS303", "KS304", "KS305")));
+    check(Numbers.parse("KS K S303 AKS303 KS\n303").isEmpty());
+    check(Numbers.ocrSuggestions("KS3O3").equals(Arrays.asList("KS303")));
+    check(Numbers.ocrSuggestions("KS303 K303").equals(Arrays.asList("KS303", "K303")));
+    check(Numbers.normalizeSerial("ks / 00303").equals("KS00303"));
+    check(Numbers.folder("KS303").equals("KS303"));
+    check(Numbers.folder("KS/00303").equals("KS00303"));
+    check(Numbers.folderPaths("KS303").equals(Arrays.asList("DCIM/KS303/")));
+    check(Numbers.parseGeneral("KS/303").equals(Arrays.asList("KS303")));
+    check(!Numbers.folder("KS303").equals(Numbers.folder("K303")));
     System.out.println(checks + " parser assertions passed");
   }
 }
